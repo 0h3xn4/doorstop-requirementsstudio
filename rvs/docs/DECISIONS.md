@@ -19,3 +19,7 @@ One line each: decision — rationale. Status: **A** = answered by user, **D** =
 | D13 | Typed links stored as extended attributes (`link_satisfies`, `link_verifies`, `link_refines`, `link_conflicts`, `link_refs`) as lists of item UIDs; RVS validates targets | Doorstop `links` are parent-only (spec table) | D |
 | D14 | Change log (who/when/why) is derived from Git commits (trailer `RVS-Reason:`) plus `rvs/changes/*.yaml` for change requests; no timestamps inside item files | Rule 14 (byte-identical regeneration) | D |
 | D15 | Baseline = annotated Git tag `rvs/baseline/<name>` + manifest `baselines/<name>.yaml` (item UID → content hash) committed before tagging | Immutable, diffable, offline | D |
+| D16 | Runtime dep is `PySide6-Essentials==6.12.0` (not the `PySide6` meta package) | Meta package drags in Addons + WebEngine (Chromium); Essentials is enough for Widgets and keeps the bundle ~150 MB and free of network-capable modules | D |
+| D17 | Git access for baselines/history (M5) uses pure-Python `dulwich`, not a system `git` | Locked-down workstations may lack git; rule 10 (no compiler). Revisit in M5 spike | D |
+| D18 | Linux hosts need system Qt libs (libEGL, libGL, libxkbcommon, fontconfig, dbus) — listed in the install notes and CI | Qt xcb/offscreen platform plugins link against them; not pip-installable | D |
+| D19 | Installer in M0 is a PyInstaller one-folder portable build (no admin); MSI/NSIS/`.run` wrappers are M6 | Smallest thing that satisfies "portable build" now | D |

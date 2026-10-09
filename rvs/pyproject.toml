@@ -1,0 +1,67 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rvs"
+version = "0.1.0"
+description = "Requirements & Verification Studio - offline requirements management on Doorstop"
+requires-python = ">=3.11,<3.14"
+license = { text = "Proprietary" }
+dependencies = [
+    "doorstop==3.2",
+    "PySide6-Essentials==6.12.0",
+]
+
+# Release and dev tooling NEVER goes in [project].dependencies (spec rule 8).
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "pytest-qt>=4.4",
+    "hypothesis>=6",
+    "mypy>=1.10",
+    "ruff>=0.5",
+    "import-linter>=2",
+    "pyinstaller>=6",
+    "cyclonedx-bom>=4",
+    "pip-licenses>=5",
+    "pip-audit>=2",
+    "build>=1",
+]
+
+[project.scripts]
+rvs = "rvs_cli.main:main"
+
+[project.gui-scripts]
+rvs-studio = "rvs_gui.app:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+rvs_gui = ["assets/fonts/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+filterwarnings = ["error"]
+
+[tool.ruff]
+line-length = 120
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM"]
+ignore = ["S101", "S603", "S404"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S"]
+
+[tool.mypy]
+strict = true
+mypy_path = "src"
+files = ["src"]
+
+[[tool.mypy.overrides]]
+module = ["doorstop.*"]
+ignore_missing_imports = true

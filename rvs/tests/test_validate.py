@@ -107,7 +107,11 @@ def test_doorstop_own_findings_are_included(minimal_project: Path):
     assert "SYS-0002" in text
     item.write_text(text.replace("- SYS-0002", "- SYS-0099", 1))
     report = validate_project(minimal_project)
-    assert any(f.code.startswith("DOORSTOP-") and "SYS-0099" in f.message for f in report.findings)
+    # Doorstop's "linked to unknown item" is reported once, with RVS's own code
+    assert any(
+        f.code == "RVS-LINK-TARGET-MISSING" and "SYS-0099" in f.message and f.uid == "EPS-0001" for f in report.findings
+    )
+    assert not any(f.code.startswith("DOORSTOP-") and "SYS-0099" in f.message for f in report.findings)
 
 
 def test_unresolved_standard_placeholders_are_info(minimal_project: Path):
@@ -124,7 +128,11 @@ def test_validation_is_deterministic(minimal_project: Path):
 
 def test_validation_does_not_modify_any_file(minimal_project: Path):
     def snap() -> dict[str, bytes]:
-        return {str(p): p.read_bytes() for p in sorted(minimal_project.rglob("*")) if p.is_file()}
+        return {
+            str(p): p.read_bytes()
+            for p in sorted(minimal_project.rglob("*"))
+            if p.is_file() and ".rvs-cache" not in p.parts
+        }
 
     before = snap()
     validate_project(minimal_project)

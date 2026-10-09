@@ -11,6 +11,7 @@ from rvs_core.config import ConfigError, ProjectConfig, load_project_config
 from rvs_core.findings import Finding, Severity, sort_findings
 from rvs_core.rules import build_context, run_rules
 from rvs_core.schema.versioning import VERSION_KEY, SchemaVersionError, migrate
+from rvs_core.trace import LinkGraph, validate_links
 
 FATAL_CODES = frozenset(
     {
@@ -32,6 +33,9 @@ class ValidationReport:
     findings: list[Finding] = field(default_factory=list)
     exit_code: int = 0
     config: ProjectConfig | None = None
+    items: list[ItemData] = field(default_factory=list)
+    docs: list[DocumentInfo] = field(default_factory=list)
+    graph: LinkGraph | None = None
 
     def count(self, severity: Severity) -> int:
         return sum(1 for f in self.findings if f.severity is severity)
@@ -274,7 +278,16 @@ def _doorstop_finding(level: str, message: str) -> Finding:
     )
 
 
-def validate_project(root: Path, *, strict: bool = False) -> ValidationReport:
+# Doorstop messages that RVS reports itself with its own codes (typed-link aware, no duplicates).
+_REPLACED_BY_RVS = ("no links from child document", "suspect link", "linked to unknown item")
+
+
+def validate_project(root: Path, *, strict: bool = False, doorstop: bool = True) -> ValidationReport:
+    """Validate a project folder.
+
+    ``doorstop=False`` skips Doorstop's own tree validation (slow on large projects: it re-parses every item);
+    every RVS check, including link and suspect-link checks, still runs.
+    """
     root = Path(root)
     if not root.is_dir():
         return _fatal("RVS-PROJECT-MISSING", f"Project folder {root} does not exist.", "Check the path.")
@@ -290,15 +303,24 @@ def validate_project(root: Path, *, strict: bool = False) -> ValidationReport:
         )
     try:
         project = DoorstopProject.open(root)
-        issues = project.issues(item_check=_item_check(cfg), doc_check=_doc_check(cfg))
+        docs = project.documents()
+        items = project.items()
+        issues = project.issues() if doorstop else []
     except ProjectError as exc:
         return _fatal("RVS-TREE-INVALID", str(exc), "Run 'doorstop' in the project folder for details.")
 
+    doc_check, item_check = _doc_check(cfg), _item_check(cfg)
+    for doc in docs:
+        findings.extend(doc_check(doc))
+    docs_by_prefix = {d.prefix: d for d in docs}
+    for item in items:
+        findings.extend(item_check(item, docs_by_prefix[item.document]))
     for issue in issues:
-        findings.append(issue.finding if issue.finding else _doorstop_finding(issue.level, issue.message))
-    docs = project.documents()
-    items = project.items()
+        if not any(marker in issue.message for marker in _REPLACED_BY_RVS):
+            findings.append(_doorstop_finding(issue.level, issue.message))
     findings.extend(run_rules(build_context(cfg, items, docs)))
+    graph = LinkGraph.build(cfg, items)
+    findings.extend(validate_links(cfg, graph, items))
     on_disk = {d.prefix for d in docs}
     for decl in cfg.project.documents:
         if decl.prefix not in on_disk:
@@ -331,4 +353,4 @@ def validate_project(root: Path, *, strict: bool = False) -> ValidationReport:
         strict and any(f.severity is Severity.WARNING for f in findings)
     ):
         exit_code = 1
-    return ValidationReport(findings, exit_code, cfg)
+    return ValidationReport(findings, exit_code, cfg, items, docs, graph)

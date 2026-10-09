@@ -30,8 +30,6 @@ def build_context(cfg: ProjectConfig, items: Sequence[ItemData], docs: Sequence[
     for item in items:
         for target in item.attrs.get("link_verifies") or []:
             verified.setdefault(str(target), []).append(item.uid)  # VER item verifies target
-        if item.attrs.get("link_verifies"):
-            verified.setdefault(item.uid, []).append(item.uid)  # a requirement can carry its own verifies links
     root = next((d.prefix for d in docs if d.parent is None), "")
     return RuleContext(cfg, by_uid, {d.prefix: d for d in docs}, root, {k: tuple(v) for k, v in verified.items()})
 

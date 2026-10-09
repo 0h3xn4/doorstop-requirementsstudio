@@ -113,6 +113,15 @@ class Glossary:
 
 
 @dataclass(frozen=True)
+class LinkTypeDef:
+    name: str
+    attribute: str
+    source_kinds: tuple[str, ...]
+    target_kinds: tuple[str, ...]
+    symmetric: bool = False
+
+
+@dataclass(frozen=True)
 class ProjectConfig:
     project: ProjectFile
     numbering: Numbering
@@ -122,6 +131,7 @@ class ProjectConfig:
     exports: Mapping[str, Any]
     standards: Standards
     glossary: Glossary
+    links: Mapping[str, LinkTypeDef]
 
     def attribute_defs(self, kind: str) -> dict[str, AttributeDef]:
         defs = {a.name: a for a in self.templates.kinds[kind].attributes}

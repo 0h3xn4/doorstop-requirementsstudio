@@ -144,11 +144,6 @@ def test_verified_when_approved(minimal_project: Path):
     assert "RVS-RULE-VERIFIED-WHEN-APPROVED" not in _codes(minimal_project, "SYS-0001")
 
 
-def test_verified_via_own_verifies_link(minimal_project: Path):
-    _edit(minimal_project, "SYS-0001", status="approved", link_verifies=["VER-0001"])
-    assert "RVS-RULE-VERIFIED-WHEN-APPROVED" not in _codes(minimal_project, "SYS-0001")
-
-
 def _findings(root: Path):  # type: ignore[no-untyped-def]
     cfg, _ = load_project_config(root)
     proj = DoorstopProject.open(root)

@@ -51,6 +51,10 @@ def test_no_config_or_schema_findings(sat: Path):
 
 def test_committed_copy_matches_generator(sat: Path):
     def snap(root: Path) -> dict[str, bytes]:
-        return {str(p.relative_to(root)): p.read_bytes() for p in sorted(root.rglob("*")) if p.is_file()}
+        return {
+            str(p.relative_to(root)): p.read_bytes()
+            for p in sorted(root.rglob("*"))
+            if p.is_file() and ".rvs-cache" not in p.parts
+        }
 
     assert snap(EXAMPLES / "satellite300") == snap(sat)

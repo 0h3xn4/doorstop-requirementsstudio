@@ -18,7 +18,6 @@ kinds:
       - {name: verify_method, type: enum, vocab: verify_method}
       - {name: verify_level, type: enum, vocab: verify_level}
       - {name: link_satisfies, type: uid-list}
-      - {name: link_verifies, type: uid-list}
       - {name: link_refines, type: uid-list}
       - {name: link_conflicts, type: uid-list}
       - {name: link_refs, type: ref-list}

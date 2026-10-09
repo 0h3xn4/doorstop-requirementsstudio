@@ -1,8 +1,10 @@
 """Doorstop 3.2 adapter: all reads and writes of the document tree go through Doorstop's Python API."""
 
 import logging
+import os
+import time
 from collections.abc import Callable, Iterable, Mapping
-from dataclasses import dataclass, field
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +13,8 @@ from doorstop import settings as _settings
 from doorstop.common import DoorstopError, DoorstopInfo, DoorstopWarning
 from doorstop.core import builder
 
+from rvs_core.adapter.cache import CacheStats, ItemCache, is_racy, stat_key
+from rvs_core.adapter.model import DocumentInfo, Issue, ItemData, ProjectError
 from rvs_core.findings import Finding
 from rvs_core.schema.versioning import CURRENT_VERSION, VERSION_KEY
 
@@ -28,56 +32,6 @@ _settings.REVIEW_NEW_ITEMS = False
 _CORE_FIELDS = frozenset({"level", "active", "normative", "derived", "reviewed", "text", "ref", "links", "header"})
 
 
-class ProjectError(Exception):
-    """A project operation failed; the message says what, where and what to do."""
-
-
-@dataclass(frozen=True)
-class DocumentInfo:
-    prefix: str
-    parent: str | None
-    path: str
-    sep: str
-    digits: int
-    itemformat: str
-    defaults: Mapping[str, Any]
-    fingerprint: tuple[str, ...]
-
-
-@dataclass(frozen=True)
-class ItemData:
-    uid: str
-    document: str
-    level: str
-    text: str
-    header: str
-    normative: bool
-    derived: bool
-    active: bool
-    reviewed: bool
-    ref: str
-    links: tuple[str, ...]  # Doorstop parent links
-    attrs: Mapping[str, Any] = field(default_factory=dict)  # RVS extended attributes
-    path: str = ""  # relative to the project folder
-
-    @property
-    def level_key(self) -> tuple[int, ...]:
-        """Sort key for the dotted level ("1.10" after "1.9"); headings (x.0) sort first."""
-        try:
-            return tuple(int(p) for p in self.level.split("."))
-        except ValueError:
-            return (10**9,)
-
-
-@dataclass(frozen=True)
-class Issue:
-    """A Doorstop-reported issue, or an RVS finding produced by a validation hook."""
-
-    level: str  # error | warning | info
-    message: str
-    finding: Finding | None = None
-
-
 ItemCheck = Callable[[ItemData, DocumentInfo], Iterable[Finding]]
 DocCheck = Callable[[DocumentInfo], Iterable[Finding]]
 
@@ -86,6 +40,8 @@ def _plain(value: Any) -> Any:
     """Convert Doorstop value wrappers (Text, ...) to plain Python types for stable comparison."""
     if isinstance(value, str):
         return str(value)
+    if isinstance(value, date):  # also datetime: JSON-safe and identical on every read path
+        return value.isoformat()
     if isinstance(value, list | tuple):
         return [_plain(v) for v in value]
     if isinstance(value, dict):
@@ -99,6 +55,8 @@ class DoorstopProject:
     def __init__(self, root: Path, tree: Any) -> None:
         self.root = root
         self._tree = tree
+        self._cache = ItemCache(root)
+        self.cache_stats = CacheStats()
 
     # construction ###########################################################
 
@@ -184,13 +142,59 @@ class DoorstopProject:
             reviewed=bool(item.reviewed),
             ref=str(item.ref or ""),
             links=tuple(sorted(str(u) for u in item.links)),
+            stamp=str(item.stamp()),
+            link_stamps={str(u): str(u.stamp) for u in sorted(item.links, key=str)},
             attrs=attrs,
             path=str(Path(item.path).relative_to(self.root)),
         )
 
     def items(self, prefix: str | None = None) -> list[ItemData]:
         docs = [self._doc(prefix)] if prefix else sorted(self._tree, key=lambda d: str(d.prefix))
-        return [self._data(i) for d in docs for i in sorted(d.items, key=lambda i: str(i.uid))]
+        return [item for d in docs for item in self._items_of(d)]
+
+    def _item_files(self, doc_dir: Path) -> list[Path]:
+        """Item files of a document the way Doorstop finds them (recursive, embedded documents skipped)."""
+        found: list[Path] = []
+        for dirpath, dirnames, filenames in os.walk(doc_dir):
+            dirnames[:] = sorted(d for d in dirnames if not os.path.exists(os.path.join(dirpath, d, ".doorstop.yml")))
+            found += [Path(dirpath, f) for f in filenames if f.endswith(".yml") and f != ".doorstop.yml"]
+        return sorted(found)
+
+    def _items_of(self, doc: Any) -> list[ItemData]:
+        prefix = str(doc.prefix)
+        if str(doc.itemformat) != "yaml":  # the cache only understands YAML items
+            return [self._data(i) for i in sorted(doc.items, key=lambda i: str(i.uid))]
+        doc_dir = Path(doc.path)
+        config = stat_key(doc_dir / ".doorstop.yml")
+        cached = self._cache.load(prefix, config)
+        now_ns = time.time_ns()
+        entries: dict[str, tuple[tuple[int, int], ItemData]] = {}
+        result: dict[str, ItemData] = {}
+        missing: list[tuple[Path, str, tuple[int, int]]] = []
+        for path in self._item_files(doc_dir):
+            rel = path.relative_to(doc_dir).as_posix()
+            key = stat_key(path)
+            hit = cached.get(rel)
+            if hit is not None and hit[0] == key:
+                result[rel] = hit[1]
+                entries[rel] = hit
+                self.cache_stats.hits += 1
+            else:
+                missing.append((path, rel, key))
+        if missing:
+            objects = {os.path.normpath(str(i.path)): i for i in doc.items}
+            for path, rel, key in missing:
+                obj = objects.get(os.path.normpath(str(path)))
+                if obj is None:
+                    continue  # not an item file
+                data = self._data(obj)
+                self.cache_stats.misses += 1
+                result[rel] = data
+                if not is_racy(key, now_ns):
+                    entries[rel] = (key, data)
+        if {r: v[0] for r, v in entries.items()} != {r: v[0] for r, v in cached.items()}:
+            self._cache.save(prefix, config, entries)
+        return sorted(result.values(), key=lambda i: i.uid)
 
     def get_item(self, uid: str) -> ItemData:
         return self._data(self._item(uid))

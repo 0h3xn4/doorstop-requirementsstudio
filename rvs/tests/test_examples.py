@@ -10,7 +10,7 @@ def _snapshot(root: Path) -> dict[str, bytes]:
     return {
         str(p.relative_to(root)): p.read_bytes()
         for p in sorted(root.rglob("*"))
-        if p.is_file() and ".git" not in p.parts
+        if p.is_file() and ".git" not in p.parts and ".rvs-cache" not in p.parts
     }
 
 

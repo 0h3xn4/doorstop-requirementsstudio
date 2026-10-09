@@ -11,6 +11,7 @@ from rvs_core.config.model import (
     DocumentDecl,
     Glossary,
     KindTemplate,
+    LinkTypeDef,
     Numbering,
     ProjectConfig,
     ProjectFile,
@@ -28,7 +29,7 @@ PROJECT_FILE = "rvs-project.yaml"
 RESERVED_ATTRIBUTES = frozenset(
     {"level", "active", "normative", "derived", "reviewed", "text", "ref", "references", "links", "header"}
 )
-CONFIG_NAMES = ("numbering", "vocab", "templates", "rules", "exports", "standards", "glossary")
+CONFIG_NAMES = ("numbering", "vocab", "templates", "rules", "exports", "standards", "glossary", "links")
 
 
 def _parse(text: str, source: str) -> dict[str, Any]:
@@ -144,5 +145,13 @@ def load_project_config(root: Path) -> tuple[ProjectConfig, list[Finding]]:
             tuple((t["term"], t["definition"]) for t in loaded["glossary"]["terms"]),
             {a["acronym"]: a["expansion"] for a in loaded["glossary"]["acronyms"]},
         ),
+        {
+            name: LinkTypeDef(name, t["attribute"], tuple(t["source"]), tuple(t["target"]), bool(t.get("symmetric")))
+            for name, t in sorted(loaded["links"]["types"].items())
+        },
     )
+    attr_names = [d.attribute for d in cfg.links.values()]
+    if len(set(attr_names)) != len(attr_names):
+        raise ConfigError("config/links.yaml: two link types use the same attribute.", location="config/links.yaml")
+    _check_reserved(attr_names, "config/links.yaml")
     return cfg, findings

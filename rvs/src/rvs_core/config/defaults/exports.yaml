@@ -6,12 +6,11 @@ vcm:
   layout_source: TODO-STANDARD
   columns:
     - {key: uid, title: Requirement}
+    - {key: title, title: Title}
     - {key: verify_method, title: Method}
     - {key: verify_level, title: Level}
     - {key: verification_item, title: Verification item}
     - {key: v_status, title: Status}
     - {key: evidence, title: Evidence}
 traceability:
-  columns:
-    - {key: uid, title: Item}
-    - {key: links, title: Linked items}
+  columns: [Source, Title, Linked items, Link types, Gap]

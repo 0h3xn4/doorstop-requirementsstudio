@@ -1,0 +1,6 @@
+# Item numbering: <PREFIX><sep><zero-padded number>, e.g. SYS-0012 (decision D03).
+rvs_schema_version: 1
+sep: "-"
+digits: 4
+# Per-document overrides, e.g.  documents: { OBC: { digits: 5 } }
+documents: {}

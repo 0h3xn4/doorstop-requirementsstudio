@@ -29,6 +29,9 @@ PROBE = textwrap.dedent(
     win.show()
     app.processEvents()
     win.close()
+    from rvs_core.validate import validate_project
+    report = validate_project(__import__("pathlib").Path(sys.argv[1]))
+    assert report.exit_code == 0, [f.format() for f in report.findings]
     import json
     banned = sorted(m for m in sys.modules if m.split(".")[0] in {
         "requests", "urllib3", "bottle", "ftplib", "smtplib", "xmlrpc"}
@@ -42,8 +45,11 @@ PROBE = textwrap.dedent(
 def test_app_starts_with_networking_disabled():
     import json
 
-    out = subprocess.run([sys.executable, "-I", "-c", PROBE], capture_output=True, text=True,
-                         cwd=Path(__file__).parent, timeout=120, check=False)  # fmt: skip
+    project = Path(__file__).resolve().parents[1] / "examples" / "minimal10"
+    out = subprocess.run(
+        [sys.executable, "-I", "-c", PROBE, str(project)],
+        capture_output=True, text=True, cwd=Path(__file__).parent, timeout=120, check=False,
+    )  # fmt: skip
     assert out.returncode == 0, out.stderr
     data = json.loads(out.stdout.strip().splitlines()[-1])
     assert data["opened"] == []

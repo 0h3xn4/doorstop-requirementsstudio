@@ -1,0 +1,17 @@
+# Export layouts (used from M3/M4). VCM column order follows ECSS-E-ST-10-02C only once the
+# standard text is supplied; until then this layout is a neutral placeholder.
+rvs_schema_version: 1
+provenance_fields: [tool_version, framework_version, baseline, generated, user]
+vcm:
+  layout_source: TODO-STANDARD
+  columns:
+    - {key: uid, title: Requirement}
+    - {key: verify_method, title: Method}
+    - {key: verify_level, title: Level}
+    - {key: verification_item, title: Verification item}
+    - {key: v_status, title: Status}
+    - {key: evidence, title: Evidence}
+traceability:
+  columns:
+    - {key: uid, title: Item}
+    - {key: links, title: Linked items}

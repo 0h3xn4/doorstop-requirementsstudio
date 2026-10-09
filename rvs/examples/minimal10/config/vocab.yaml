@@ -1,0 +1,10 @@
+# Controlled vocabularies. Values from the project specification; priority values are a
+# company placeholder (TODO-COMPANY): replace with your own scale.
+rvs_schema_version: 1
+values:
+  type: [functional, performance, interface, environmental, operational, design, verification]
+  priority: [high, medium, low]   # TODO-COMPANY
+  status: [draft, reviewed, approved, baselined, obsolete]
+  verify_method: [test, analysis, inspection, review-of-design]
+  verify_level: [unit, subsystem, system]
+  verification_status: [planned, in-progress, passed, failed, waived]

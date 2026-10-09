@@ -1,0 +1,40 @@
+# Document templates: attribute catalogue, defaults and fingerprint attributes per document kind.
+# Fingerprint attributes become Doorstop's "reviewed" attributes: changing them marks links suspect.
+# status/owner/priority are deliberately NOT fingerprinted.
+rvs_schema_version: 1
+kinds:
+  requirements:
+    defaults: {status: draft}
+    fingerprint: [title, type, verify_method, verify_level]
+    attributes:
+      - {name: title, type: string, required: true}
+      - {name: rationale, type: text}
+      - {name: type, type: enum, vocab: type, required: true}
+      - {name: priority, type: enum, vocab: priority}
+      - {name: status, type: enum, vocab: status, required: true}
+      - {name: owner, type: string}
+      - {name: source, type: string}
+      - {name: standard_clause, type: string}
+      - {name: verify_method, type: enum, vocab: verify_method}
+      - {name: verify_level, type: enum, vocab: verify_level}
+      - {name: link_satisfies, type: uid-list}
+      - {name: link_verifies, type: uid-list}
+      - {name: link_refines, type: uid-list}
+      - {name: link_conflicts, type: uid-list}
+      - {name: link_refs, type: ref-list}
+      - {name: rvs_schema_version, type: int, required: true}
+  verification:
+    defaults: {v_status: planned}
+    fingerprint: [title, verify_method, verify_level]
+    attributes:
+      - {name: title, type: string, required: true}
+      - {name: proc_id, type: string}
+      - {name: verify_method, type: enum, vocab: verify_method, required: true}
+      - {name: verify_level, type: enum, vocab: verify_level, required: true}
+      - {name: v_status, type: enum, vocab: verification_status, required: true}
+      - {name: evidence, type: string}
+      - {name: executed_on, type: date}
+      - {name: responsible, type: string}
+      - {name: nonconformances, type: string-list}
+      - {name: link_verifies, type: uid-list}
+      - {name: rvs_schema_version, type: int, required: true}

@@ -1,0 +1,12 @@
+{"$schema": "http://json-schema.org/draft-07/schema#", "type": "object", "additionalProperties": false,
+ "required": ["rvs_schema_version", "name", "documents"],
+ "properties": {"rvs_schema_version": {"type": "integer", "minimum": 0}, "name": {"type": "string", "minLength": 1},
+  "documents": {"type": "array", "minItems": 1, "items": {"type": "object", "additionalProperties": false,
+    "required": ["prefix", "kind", "title"],
+    "properties": {"prefix": {"type": "string", "pattern": "^[A-Z][A-Z0-9]*$"},
+      "kind": {"enum": ["requirements", "verification"]}, "title": {"type": "string", "minLength": 1},
+      "parent": {"type": "string", "pattern": "^[A-Z][A-Z0-9]*$"}}}},
+  "free_attributes": {"type": "array", "items": {"type": "object", "additionalProperties": false,
+    "required": ["name", "type"],
+    "properties": {"name": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+      "type": {"enum": ["string", "text", "int", "date", "string-list"]}}}}}}

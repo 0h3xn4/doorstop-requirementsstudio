@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.2
+links:
+- SYS-0001: Jsl-E2V08_QneZVP3cqQO88x1pA60XR7WC9kR8I1MaI=
+normative: true
+owner: systems
+priority: high
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The solar array shall generate power in sunlight for all payloads.
+title: Array output
+type: performance
+verify_level: subsystem
+verify_method: test

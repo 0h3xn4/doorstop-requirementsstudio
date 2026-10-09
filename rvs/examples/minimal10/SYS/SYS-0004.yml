@@ -1,0 +1,14 @@
+active: true
+derived: false
+header: |
+  System requirements
+level: 1.0
+links: []
+normative: false
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  Requirements derived from the mission statement.
+title: Mission-derived

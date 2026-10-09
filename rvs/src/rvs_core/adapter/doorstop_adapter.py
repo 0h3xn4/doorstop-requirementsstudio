@@ -1,0 +1,278 @@
+"""Doorstop 3.2 adapter: all reads and writes of the document tree go through Doorstop's Python API."""
+
+import logging
+from collections.abc import Callable, Iterable, Mapping
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+import doorstop
+from doorstop import settings as _settings
+from doorstop.common import DoorstopError, DoorstopInfo, DoorstopWarning
+from doorstop.core import builder
+
+from rvs_core.findings import Finding
+from rvs_core.schema.versioning import CURRENT_VERSION, VERSION_KEY
+
+# Doorstop logs item details at debug level; project content must never reach a log sink (spec rule 11).
+logging.getLogger("doorstop").setLevel(logging.CRITICAL)
+
+# Validation must never rewrite files (DEVIATIONS V09 / spec rule 14): Doorstop would otherwise stamp
+# unstamped links, reformat link lists and auto-review new items while validating. RVS stamps links explicitly in link().
+_settings.REORDER = False
+_settings.REFORMAT = False
+_settings.STAMP_NEW_LINKS = False
+_settings.REVIEW_NEW_ITEMS = False
+
+# Doorstop item fields that are not RVS extended attributes.
+_CORE_FIELDS = frozenset({"level", "active", "normative", "derived", "reviewed", "text", "ref", "links", "header"})
+
+
+class ProjectError(Exception):
+    """A project operation failed; the message says what, where and what to do."""
+
+
+@dataclass(frozen=True)
+class DocumentInfo:
+    prefix: str
+    parent: str | None
+    path: str
+    sep: str
+    digits: int
+    itemformat: str
+    defaults: Mapping[str, Any]
+    fingerprint: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class ItemData:
+    uid: str
+    document: str
+    level: str
+    text: str
+    header: str
+    normative: bool
+    derived: bool
+    active: bool
+    reviewed: bool
+    ref: str
+    links: tuple[str, ...]  # Doorstop parent links
+    attrs: Mapping[str, Any] = field(default_factory=dict)  # RVS extended attributes
+    path: str = ""  # relative to the project folder
+
+
+@dataclass(frozen=True)
+class Issue:
+    """A Doorstop-reported issue, or an RVS finding produced by a validation hook."""
+
+    level: str  # error | warning | info
+    message: str
+    finding: Finding | None = None
+
+
+ItemCheck = Callable[[ItemData, DocumentInfo], Iterable[Finding]]
+DocCheck = Callable[[DocumentInfo], Iterable[Finding]]
+
+
+def _plain(value: Any) -> Any:
+    """Convert Doorstop value wrappers (Text, ...) to plain Python types for stable comparison."""
+    if isinstance(value, str):
+        return str(value)
+    if isinstance(value, list | tuple):
+        return [_plain(v) for v in value]
+    if isinstance(value, dict):
+        return {str(k): _plain(v) for k, v in value.items()}
+    return value
+
+
+class DoorstopProject:
+    """A project folder, i.e. a Doorstop tree. Not thread-safe; create one per worker."""
+
+    def __init__(self, root: Path, tree: Any) -> None:
+        self.root = root
+        self._tree = tree
+
+    # construction ###########################################################
+
+    @classmethod
+    def open(cls, root: Path) -> "DoorstopProject":
+        root = Path(root)
+        if not root.is_dir():
+            raise ProjectError(f"Project folder {root} does not exist. Check the path or create a project first.")
+        try:
+            return cls(root, builder.build(root=str(root)))
+        except DoorstopError as exc:
+            raise ProjectError(f"The document tree in {root} cannot be loaded: {exc}") from exc
+
+    @classmethod
+    def create(cls, root: Path) -> "DoorstopProject":
+        root = Path(root)
+        root.mkdir(parents=True, exist_ok=True)
+        return cls.open(root)
+
+    # documents ##############################################################
+
+    def _doc(self, prefix: str) -> Any:
+        try:
+            return self._tree.find_document(prefix)
+        except DoorstopError:
+            raise ProjectError(f"Document '{prefix}' does not exist. Declare it in rvs-project.yaml first.") from None
+
+    def _info(self, doc: Any) -> DocumentInfo:
+        return DocumentInfo(
+            prefix=str(doc.prefix),
+            parent=str(doc.parent) if doc.parent else None,
+            path=str(Path(doc.path).relative_to(self.root)),
+            sep=str(doc.sep),
+            digits=int(doc.digits),
+            itemformat=str(doc.itemformat),
+            defaults=dict(doc._attribute_defaults or {}),  # no public getter in Doorstop 3.2 (DEVIATIONS V08)
+            fingerprint=tuple(doc.extended_reviewed),
+        )
+
+    def documents(self) -> list[DocumentInfo]:
+        return sorted((self._info(d) for d in self._tree), key=lambda d: d.prefix)
+
+    def create_document(
+        self,
+        prefix: str,
+        *,
+        parent: str | None = None,
+        sep: str = "-",
+        digits: int = 4,
+        defaults: Mapping[str, Any] | None = None,
+        fingerprint: Iterable[str] = (),
+    ) -> DocumentInfo:
+        try:
+            doc = self._tree.create_document(str(self.root / prefix), prefix, parent=parent, sep=sep, digits=digits)
+        except DoorstopError as exc:
+            raise ProjectError(f"Document '{prefix}' cannot be created: {exc}") from exc
+        # Doorstop 3.2 has no public API to set attribute defaults or fingerprint attributes (DEVIATIONS V08);
+        # the document is then saved through Doorstop itself.
+        doc._attribute_defaults = dict(defaults) if defaults else None
+        doc._extended_reviewed = sorted(set(fingerprint))
+        doc.save()
+        return self._info(doc)
+
+    # items ##################################################################
+
+    def _item(self, uid: str) -> Any:
+        try:
+            return self._tree.find_item(uid)
+        except DoorstopError:
+            raise ProjectError(f"Item '{uid}' does not exist. Check the ID or refresh the project.") from None
+
+    def _data(self, item: Any) -> ItemData:
+        attrs = {k: _plain(item.get(k)) for k in sorted(item.extended)}
+        return ItemData(
+            uid=str(item.uid),
+            document=str(item.document.prefix),
+            level=str(item.level),
+            text=str(item.text),
+            header=str(item.header or ""),
+            normative=bool(item.normative),
+            derived=bool(item.derived),
+            active=bool(item.active),
+            reviewed=bool(item.reviewed),
+            ref=str(item.ref or ""),
+            links=tuple(sorted(str(u) for u in item.links)),
+            attrs=attrs,
+            path=str(Path(item.path).relative_to(self.root)),
+        )
+
+    def items(self, prefix: str | None = None) -> list[ItemData]:
+        docs = [self._doc(prefix)] if prefix else sorted(self._tree, key=lambda d: str(d.prefix))
+        return [self._data(i) for d in docs for i in sorted(d.items, key=lambda i: str(i.uid))]
+
+    def get_item(self, uid: str) -> ItemData:
+        return self._data(self._item(uid))
+
+    def add_item(
+        self,
+        prefix: str,
+        text: str,
+        *,
+        attrs: Mapping[str, Any] | None = None,
+        level: str | None = None,
+        normative: bool = True,
+        derived: bool = False,
+        header: str = "",
+    ) -> ItemData:
+        doc = self._doc(prefix)
+        item = doc.add_item(level=level, reorder=False)  # reorder would rewrite every item file
+        item.text = text
+        item.normative = normative
+        item.derived = derived
+        if header:
+            item.header = header
+        merged = {VERSION_KEY: CURRENT_VERSION, **(attrs or {})}
+        item.set_attributes(merged)
+        return self._data(item)
+
+    def update_item(self, uid: str, *, text: str | None = None, attrs: Mapping[str, Any] | None = None) -> ItemData:
+        item = self._item(uid)
+        if text is not None:
+            item.text = text
+        if attrs:
+            item.set_attributes(dict(attrs))
+        return self._data(item)
+
+    # links, suspect links, review ###########################################
+
+    def link(self, child_uid: str, parent_uid: str) -> None:
+        self._item(parent_uid)
+        child = self._item(child_uid)
+        child.link(parent_uid)
+        child.clear([parent_uid])  # stamp the new link so it is not suspect
+
+    def suspect_links(self, uid: str) -> tuple[str, ...]:
+        item = self._item(uid)
+        return tuple(
+            sorted(
+                str(link)
+                for link, parent in zip(item.links, item.parent_items, strict=True)
+                if link.stamp != parent.stamp()
+            )
+        )
+
+    def clear_suspect(self, uid: str) -> None:
+        self._item(uid).clear()
+
+    def review_item(self, uid: str) -> None:
+        self._item(uid).review()
+
+    # validation #############################################################
+
+    def issues(self, item_check: ItemCheck | None = None, doc_check: DocCheck | None = None) -> list[Issue]:
+        """Run Doorstop's tree validation, with RVS checks attached as document and item hooks."""
+        hook_findings: list[Finding] = []
+
+        def document_hook(document: Any, tree: Any) -> list[Any]:
+            if doc_check is not None:
+                hook_findings.extend(doc_check(self._info(document)))
+            return []
+
+        def item_hook(item: Any, document: Any, tree: Any) -> list[Any]:
+            if item_check is not None:
+                hook_findings.extend(item_check(self._data(item), self._info(document)))
+            return []
+
+        out: list[Issue] = []
+        try:
+            for exc in self._tree.get_issues(document_hook=document_hook, item_hook=item_hook):
+                level = (
+                    "info"
+                    if isinstance(exc, DoorstopInfo)
+                    else "warning"
+                    if isinstance(exc, DoorstopWarning)
+                    else "error"
+                )
+                out.append(Issue(level, str(exc)))
+        except DoorstopError as exc:
+            raise ProjectError(f"Doorstop validation stopped: {exc}") from exc
+        out.extend(Issue(f.severity.value, f.message, f) for f in hook_findings)
+        return out
+
+
+def framework_version() -> str:
+    return str(doorstop.VERSION)

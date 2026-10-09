@@ -1,0 +1,3 @@
+{"$schema": "http://json-schema.org/draft-07/schema#", "type": "object", "required": ["rvs_schema_version"],
+ "properties": {"rvs_schema_version": {"type": "integer", "minimum": 0}, "provenance_fields": {"type": "array", "items": {"type": "string"}},
+  "vcm": {"type": "object"}, "traceability": {"type": "object"}}, "additionalProperties": false}

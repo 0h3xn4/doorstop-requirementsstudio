@@ -11,6 +11,8 @@ license = { text = "Proprietary" }
 dependencies = [
     "doorstop==3.2",
     "PySide6-Essentials==6.12.0",
+    "PyYAML==6.0.3",
+    "fastjsonschema==2.22.2",
 ]
 
 # Release and dev tooling NEVER goes in [project].dependencies (spec rule 8).
@@ -27,6 +29,7 @@ dev = [
     "pip-licenses>=5",
     "pip-audit>=2",
     "build>=1",
+    "types-PyYAML",
 ]
 
 [project.scripts]
@@ -40,10 +43,12 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 rvs_gui = ["assets/fonts/*"]
+rvs_core = ["config/defaults/*.yaml", "config/schemas/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra --strict-markers"
+addopts = "-ra --strict-markers -m \"not perf\""
+markers = ["perf: performance spikes, run with -m perf"]
 filterwarnings = ["error"]
 
 [tool.ruff]
@@ -52,7 +57,7 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "S", "SIM"]
-ignore = ["S101", "S603", "S404"]
+ignore = ["S101", "S603", "S404", "E501"]  # long user-facing message strings are fine; ruff format wraps code
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S"]
@@ -63,5 +68,5 @@ mypy_path = "src"
 files = ["src"]
 
 [[tool.mypy.overrides]]
-module = ["doorstop.*"]
+module = ["doorstop.*", "fastjsonschema"]
 ignore_missing_imports = true

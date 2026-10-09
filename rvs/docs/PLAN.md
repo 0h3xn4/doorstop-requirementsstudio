@@ -8,7 +8,7 @@ Rule for every milestone: tests first; mypy + ruff clean; offline test and `door
 - Offline test (design in DEVIATIONS V01). Decide Git strategy.
 - **Accept:** installer builds on both OSes, app starts offline, offline test green, runtime `pip install` pulls no dev tools.
 
-## M1 Model and files
+## M1 Model and files  *(done — see docs/demo/M1.md)*
 - Adapter, extended attributes, fingerprint settings, schema versions + migration/newer-refusal, config loaders + JSON Schemas, `rvs validate` (Doorstop validation + RVS config/schema checks), minimal 10-item project.
 - Spike: 5,000-item load timing.
 - **Accept:** `doorstop` CLI passes on minimal project; byte-identical regeneration; migration tests; validate returns stable exit codes.

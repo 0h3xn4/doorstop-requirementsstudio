@@ -44,7 +44,7 @@ project/
   changes/CR-0001.yaml           # change requests
 ```
 - Every RVS-owned YAML has `rvs_schema_version: <int>`; items carry it as an extended attribute. Older -> migrate in memory and on explicit save; newer -> error naming file, found/supported version.
-- Item extended attributes: `title, rationale, type, priority, status, owner, source, standard_clause, verify_method, verify_level` (requirements); `proc_id, method, level, v_status, evidence, executed_on, responsible, nonconformances` (verification items); typed links `link_satisfies|verifies|refines|conflicts|refs`.
+- Item extended attributes: `title, rationale, type, priority, status, owner, source, standard_clause, verify_method, verify_level` (requirements); `proc_id, verify_method, verify_level, v_status, evidence, executed_on, responsible, nonconformances` (verification items); typed links `link_satisfies|verifies|refines|conflicts|refs`.
 - Fingerprints: only `text`, `title`, `type`, `verify_method`, `verify_level` listed in the document's fingerprint attribute settings; `status`, `owner`, `priority` excluded so status changes don't create suspect links.
 - Determinism: stable key order, sorted link lists, no timestamps in files; IDs allocated by Doorstop sequence. Dates (execution date) are user data, not generation time.
 - Writes only through Doorstop API; review state only via Doorstop review API.
@@ -61,6 +61,11 @@ project/
 
 ## 5. Dependencies (runtime)
 `doorstop==3.2`, `PySide6` (pinned), `openpyxl`, `python-docx`, `reportlab` (pure-Python PDF; WeasyPrint rejected: needs Pango/Cairo system libs), `markdown`, `pyyaml` (via Doorstop), `jsonschema`, `platformdirs`. Dev only: pytest, pytest-qt, hypothesis, mypy, ruff, import-linter, pyinstaller, cyclonedx-bom, pip-licenses, pip-audit. Builds from a vendored wheelhouse (`pip download` mirror) for reproducibility.
+
+## 5a. As built in M1
+- `rvs-project.yaml` declares documents/kinds (D21); the Doorstop tree has a single root, so VER is a child of SYS (V07).
+- `rvs_core.validate.validate_project` = config load + schema versions + RVS hooks (documents, items) + Doorstop's own validation, all read-only (V09). Findings carry code, severity, message, hint, location, uid.
+- Performance spike (5,000 items): open 0.01 s (lazy), read all 4.4 s, full validate 15.6 s, build 62 s. Target (open < 3 s) needs the index cache (D27) in M3.
 
 ## 6. Risks
 1. Doorstop's transitive network libs vs. offline test (DEVIATIONS V01).

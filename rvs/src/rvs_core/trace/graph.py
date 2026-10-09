@@ -61,7 +61,8 @@ class LinkGraph:
             for parent in item.links:
                 add(item.uid, parent, PARENT)
             for name, definition in cfg.links.items():
-                for target in item.attrs.get(definition.attribute) or []:
+                targets = item.attrs.get(definition.attribute)
+                for target in targets if isinstance(targets, list) else []:  # wrong types: RVS-ATTR-TYPE
                     add(item.uid, str(target), name)
         sym = frozenset(n for n, d in cfg.links.items() if d.symmetric)
         return cls(edges, unresolved, sym, uids)

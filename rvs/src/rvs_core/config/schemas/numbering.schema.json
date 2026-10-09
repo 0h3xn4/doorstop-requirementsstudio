@@ -1,5 +1,5 @@
 {"$schema": "http://json-schema.org/draft-07/schema#", "type": "object", "additionalProperties": false,
  "required": ["rvs_schema_version", "sep", "digits"],
- "properties": {"rvs_schema_version": {"type": "integer", "minimum": 0}, "sep": {"type": "string", "minLength": 1, "maxLength": 1}, "digits": {"type": "integer", "minimum": 1, "maximum": 9},
+ "properties": {"rvs_schema_version": {"type": "integer", "minimum": 0}, "sep": {"type": "string", "enum": ["-"]}, "digits": {"type": "integer", "minimum": 1, "maximum": 9},
   "documents": {"type": "object", "additionalProperties": {"type": "object", "additionalProperties": false,
-    "properties": {"sep": {"type": "string", "minLength": 1, "maxLength": 1}, "digits": {"type": "integer", "minimum": 1, "maximum": 9}}}}}}
+    "properties": {"sep": {"type": "string", "enum": ["-"]}, "digits": {"type": "integer", "minimum": 1, "maximum": 9}}}}}}

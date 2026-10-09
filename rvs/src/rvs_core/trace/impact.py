@@ -1,5 +1,6 @@
 """Impact analysis: everything downstream of an item that a change could affect."""
 
+from collections import deque
 from dataclasses import dataclass, field
 
 from rvs_core.trace.graph import PARENT, LinkGraph
@@ -40,15 +41,14 @@ def impact(graph: LinkGraph, uid: str) -> ImpactResult:
     root = ImpactNode(uid)
     seen = {uid}
 
-    def expand(node: ImpactNode) -> None:
+    queue = deque([root])  # breadth first, so an item reachable by several routes sits at its shallowest depth
+    while queue:
+        node = queue.popleft()
         for edge in sorted(graph.incoming(node.uid, DOWNSTREAM), key=lambda e: (e.source, e.type)):
             if edge.source in seen:
-                continue  # cycles and diamonds: list every affected item once, at its shallowest depth
+                continue  # cycles and diamonds: list every affected item once
             seen.add(edge.source)
             child = ImpactNode(edge.source, node.depth + 1, edge.type)
             node.children.append(child)
-        for child in node.children:
-            expand(child)
-
-    expand(root)
+            queue.append(child)
     return ImpactResult(root, tuple(r for r in graph.related(uid) if r not in seen))

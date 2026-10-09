@@ -28,6 +28,7 @@ FATAL_CODES = frozenset(
         "RVS-CONFIG-YAML",
         "RVS-TREE-INVALID",
         "RVS-ITEM-UNREADABLE",
+        "RVS-VALIDATION-FAILED",
     }
 )
 _UID = re.compile(r"^[A-Z][A-Z0-9]*-\d+$")
@@ -54,13 +55,23 @@ def _is_str(v: Any) -> bool:
     return isinstance(v, str)
 
 
+def _is_iso_date(value: str) -> bool:
+    if re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", value) is None:
+        return False
+    try:
+        date.fromisoformat(value)
+    except ValueError:
+        return False
+    return True
+
+
 def _type_ok(kind: str, value: Any) -> bool:
     if kind in ("string", "text", "enum"):
         return _is_str(value)
     if kind == "int":
         return isinstance(value, int) and not isinstance(value, bool)
     if kind == "date":
-        return isinstance(value, date) or (_is_str(value) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", value) is not None)
+        return isinstance(value, date) or (_is_str(value) and _is_iso_date(value))
     if kind == "string-list":
         return isinstance(value, list) and all(_is_str(v) for v in value)
     if kind == "uid-list":
@@ -153,6 +164,17 @@ def _item_check(cfg: ProjectConfig):  # type: ignore[no-untyped-def]
             return []  # reported once per document
         out: list[Finding] = []
         loc, uid = item.path, item.uid
+        if not re.fullmatch(rf"{re.escape(doc.prefix)}{re.escape(doc.sep)}[0-9]+", uid):
+            out.append(
+                Finding(
+                    "RVS-ITEM-NAME",
+                    Severity.ERROR,
+                    f"The item file {loc} is named {uid}, which is not an item ID of document {doc.prefix} "
+                    f"(expected {doc.prefix}{doc.sep}0001 style).",
+                    "Rename or remove the file (an Explorer 'copy of' file or an item from another document is the usual cause).",
+                    loc,
+                )
+            )
 
         version = item.attrs.get(VERSION_KEY)
         if version is None:
@@ -295,6 +317,18 @@ _REPLACED_BY_RVS = ("no links from child document", "suspect link", "linked to u
 
 
 def validate_project(root: Path, *, strict: bool = False, doorstop: bool = True) -> ValidationReport:
+    """Validate a project folder; never raises. Anything unexpected becomes a fatal finding (see ``_validate``)."""
+    try:
+        return _validate(Path(root), strict=strict, doorstop=doorstop)
+    except Exception as exc:  # noqa: BLE001 - hand-edited files can break any assumption; report, do not crash
+        return _fatal(
+            "RVS-VALIDATION-FAILED",
+            f"Validation stopped unexpectedly ({type(exc).__name__}). A file with content RVS cannot interpret is the usual cause.",
+            "Check the files you edited by hand most recently ('git diff' shows them). If nothing explains it, send the crash report.",
+        )
+
+
+def _validate(root: Path, *, strict: bool, doorstop: bool) -> ValidationReport:
     """Validate a project folder.
 
     ``doorstop=False`` skips Doorstop's own tree validation (slow on large projects: it re-parses every item);

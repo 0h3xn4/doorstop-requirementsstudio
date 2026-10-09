@@ -52,7 +52,15 @@ def packaged_default(name: str) -> dict[str, Any]:
 
 def _load_one(name: str, path: Path, relative: str, findings: list[Finding], *, default_ok: bool) -> dict[str, Any]:
     if path.is_file():
-        data = _parse(path.read_text(encoding="utf-8"), relative)
+        try:
+            text = path.read_text(encoding="utf-8-sig")
+        except UnicodeDecodeError:
+            raise ConfigError(
+                f"{relative} is not saved as UTF-8 text. Open it in an editor and save it as UTF-8.",
+                "RVS-CONFIG-YAML",
+                relative,
+            ) from None
+        data = _parse(text, relative)
     elif default_ok:
         findings.append(
             Finding(

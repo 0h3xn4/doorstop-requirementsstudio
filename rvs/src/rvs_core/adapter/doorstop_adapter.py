@@ -4,6 +4,7 @@ import logging
 import os
 import time
 from collections.abc import Callable, Iterable, Mapping
+from dataclasses import replace
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -161,7 +162,10 @@ class DoorstopProject:
             item = self._index[uid]
         except KeyError:
             raise ProjectError(f"Item '{uid}' does not exist. Check the ID or refresh the project.") from None
-        item.load()  # Doorstop's plain setters save without loading first: an unloaded item would overwrite its file
+        try:
+            item.load()  # Doorstop's plain setters save without loading first: an unloaded item would overwrite its file
+        except DoorstopError as exc:
+            raise UnreadableItemError(f"The file of {uid} cannot be read. {str(exc).strip()}") from None
         return item
 
     def _data(self, item: Any) -> ItemData:
@@ -190,6 +194,11 @@ class DoorstopProject:
             return [item for d in docs for item in self._items_of(d)]
         except DoorstopError as exc:
             raise UnreadableItemError(f"An item file cannot be read. {str(exc).strip()}") from None
+        except (ValueError, TypeError, AttributeError, KeyError, yaml.YAMLError, RecursionError) as exc:
+            # hand-edited YAML that parses but is wrong (an impossible date, a number where text belongs, ...)
+            raise UnreadableItemError(
+                f"An item file has content RVS cannot read ({type(exc).__name__}). Check the most recently edited item files."
+            ) from None
 
     def _item_files(self, doc_dir: Path) -> list[Path]:
         """Item files of a document the way Doorstop finds them (recursive, embedded documents skipped)."""
@@ -215,8 +224,10 @@ class DoorstopProject:
             key = stat_key(path)
             hit = cached.get(rel)
             if hit is not None and hit[0] == key:
-                result[rel] = hit[1]
-                entries[rel] = hit
+                # the cached path may be from before the document folder was moved: recompute it
+                data = replace(hit[1], path=str((doc_dir / rel).relative_to(self.root)))
+                result[rel] = data
+                entries[rel] = (hit[0], data)
                 self.cache_stats.hits += 1
             else:
                 missing.append((path, rel, key))
@@ -318,10 +329,11 @@ class DoorstopProject:
         for current in [str(u) for u in item.links]:
             if current not in wanted:
                 item.unlink(current)
-        for parent in wanted:
-            if parent not in [str(u) for u in item.links]:
-                item.link(parent)
-        item.clear(wanted)
+        added = [p for p in wanted if p not in [str(u) for u in item.links]]
+        for parent in added:
+            item.link(parent)
+        if added:
+            item.clear(added)  # only the new links are stamped; a link that was already suspect stays suspect
 
     def suspect_links(self, uid: str) -> tuple[str, ...]:
         item = self._item(uid)

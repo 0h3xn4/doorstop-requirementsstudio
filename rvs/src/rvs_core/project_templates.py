@@ -73,6 +73,8 @@ def create_from_template(root: Path, name: str, template: str, *, git: bool = Fa
         raise ValueError(f"{root} already contains an RVS project. Choose an empty folder.")
     if not name.strip():
         raise ValueError("The project needs a name.")
+    if root.exists() and any(p.name != ".git" for p in root.iterdir()):
+        raise ValueError(f"{root} is not empty, so a project cannot be created there. Choose a new or empty folder.")
     project = create_project(root, name.strip(), TEMPLATES[template].documents)
     if git:
         GitRepo.init(root)

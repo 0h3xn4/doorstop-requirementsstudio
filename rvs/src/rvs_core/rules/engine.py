@@ -28,7 +28,8 @@ def build_context(cfg: ProjectConfig, items: Sequence[ItemData], docs: Sequence[
     by_uid = {i.uid: i for i in items}
     verified: dict[str, list[str]] = {}
     for item in items:
-        for target in item.attrs.get("link_verifies") or []:
+        targets = item.attrs.get("link_verifies")
+        for target in targets if isinstance(targets, list) else []:  # a wrong type is reported as RVS-ATTR-TYPE
             verified.setdefault(str(target), []).append(item.uid)  # VER item verifies target
     root = next((d.prefix for d in docs if d.parent is None), "")
     return RuleContext(cfg, by_uid, {d.prefix: d for d in docs}, root, {k: tuple(v) for k, v in verified.items()})
@@ -49,8 +50,22 @@ def _applies_to_requirement(ctx: RuleContext, item: ItemData) -> bool:
     return ctx.kind(item) == "requirements" and item.normative and item.active
 
 
+def _items(value: object) -> list[object]:
+    """A parameter that should be a list (an empty `words:` in the YAML is None)."""
+    return list(value) if isinstance(value, list) else []
+
+
+def _number(value: object, default: int) -> int:
+    return value if isinstance(value, int) and not isinstance(value, bool) else default
+
+
+def _text(value: object) -> str:
+    return value if isinstance(value, str) else ""
+
+
 def _word(keyword: str) -> re.Pattern[str]:
-    return re.compile(rf"(?<!\w){re.escape(keyword)}(?!\w)", re.IGNORECASE)
+    phrase = r"\s+".join(re.escape(part) for part in keyword.split())  # a phrase also matches across a line break
+    return re.compile(rf"(?<!\w){phrase}(?!\w)", re.IGNORECASE)
 
 
 def _shall_present(ctx: RuleContext, item: ItemData, rule: _Rule) -> Iterable[tuple[str, str]]:
@@ -64,7 +79,7 @@ def _shall_present(ctx: RuleContext, item: ItemData, rule: _Rule) -> Iterable[tu
 
 def _single_statement(ctx: RuleContext, item: ItemData, rule: _Rule) -> Iterable[tuple[str, str]]:
     kw = str(rule.params.get("keyword", "shall"))
-    limit = int(rule.params.get("max", 1))
+    limit = _number(rule.params.get("max"), 1)
     n = len(_word(kw).findall(item.text))
     if _applies_to_requirement(ctx, item) and n > limit:
         yield (
@@ -76,7 +91,7 @@ def _single_statement(ctx: RuleContext, item: ItemData, rule: _Rule) -> Iterable
 def _vague_words(ctx: RuleContext, item: ItemData, rule: _Rule) -> Iterable[tuple[str, str]]:
     if not _applies_to_requirement(ctx, item):
         return
-    for word in rule.params.get("words", []):
+    for word in _items(rule.params.get("words")):
         if _word(str(word)).search(item.text):
             yield (
                 f"{item.uid} uses the vague wording '{word}'.",
@@ -87,7 +102,7 @@ def _vague_words(ctx: RuleContext, item: ItemData, rule: _Rule) -> Iterable[tupl
 def _no_implementation(ctx: RuleContext, item: ItemData, rule: _Rule) -> Iterable[tuple[str, str]]:
     if not (_applies_to_requirement(ctx, item) and item.attrs.get("type") == "functional"):
         return
-    for term in rule.params.get("terms", []):
+    for term in _items(rule.params.get("terms")):
         if _word(str(term)).search(item.text):
             yield (
                 f"{item.uid} is a functional requirement but mentions the implementation term '{term}'.",
@@ -109,8 +124,12 @@ def _has_parent(ctx: RuleContext, item: ItemData, rule: _Rule) -> Iterable[tuple
 
 
 def _verified_when_approved(ctx: RuleContext, item: ItemData, rule: _Rule) -> Iterable[tuple[str, str]]:
-    statuses = set(rule.params.get("statuses", ["approved"]))
-    if _applies_to_requirement(ctx, item) and item.attrs.get("status") in statuses and item.uid not in ctx.verified_by:
+    statuses = {str(x) for x in _items(rule.params.get("statuses", ["approved"]))}
+    if (
+        _applies_to_requirement(ctx, item)
+        and _text(item.attrs.get("status")) in statuses
+        and item.uid not in ctx.verified_by
+    ):
         yield (
             f"{item.uid} is {item.attrs.get('status')} but nothing verifies it.",
             "Link a verification item to it, or set the status back to draft or reviewed.",
@@ -125,7 +144,10 @@ def _undefined_acronym(ctx: RuleContext, item: ItemData, rule: _Rule) -> Iterabl
     parts = [item.text, str(item.attrs.get("title") or ""), str(item.attrs.get("rationale") or "")]
     for part in parts:
         for hit in find_acronyms(
-            part, known, min_length=int(rule.params.get("min_length", 2)), ignore=set(rule.params.get("ignore", []))
+            part,
+            known,
+            min_length=_number(rule.params.get("min_length"), 2),
+            ignore={str(x) for x in _items(rule.params.get("ignore"))},
         ):
             if not hit.defined and hit.text not in seen:
                 seen.add(hit.text)

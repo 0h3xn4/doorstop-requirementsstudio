@@ -11,6 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from rvs_core import textcheck
 from rvs_core.adapter import DoorstopProject, ItemData
 from rvs_core.changecontrol.changes import ChangeRequestError, ChangeRequestStore
 from rvs_core.changecontrol.manifests import baselined_uids
@@ -23,6 +24,12 @@ class ReasonRequiredError(Exception):
     """The item is in a status that requires a reason for every edit."""
 
 
+def _ends_with_newline(path: Path) -> bool:
+    with path.open("rb") as fh:
+        fh.seek(-1, 2)
+        return fh.read(1) == b"\n"
+
+
 def history_path(root: Path, uid: str) -> Path:
     prefix = uid.rsplit("-", 1)[0]
     return root / HISTORY_DIR / prefix / f"{uid}.jsonl"
@@ -32,7 +39,15 @@ def read_history(root: Path, uid: str) -> list[dict[str, Any]]:
     path = history_path(root, uid)
     if not path.is_file():
         return []
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    entries: list[dict[str, Any]] = []
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        try:
+            entry = json.loads(line) if line.strip() else None
+        except ValueError:
+            continue  # a half-written line or a merge-conflict marker must not hide the rest of the history
+        if isinstance(entry, dict):
+            entries.append(entry)
+    return entries
 
 
 def _os_user() -> str:
@@ -72,11 +87,15 @@ class EditService:
         }
         if self.change_request:
             entry["cr"] = self.change_request
-        with path.open("a", encoding="utf-8", newline="\n") as fh:
+        with path.open("a+", encoding="utf-8", newline="\n") as fh:
+            if path.stat().st_size and not _ends_with_newline(path):
+                fh.write("\n")  # keep the entry off the end of an unterminated line
             fh.write(json.dumps(entry, sort_keys=True, ensure_ascii=False) + "\n")
 
     def _check_parents(self, proj: DoorstopProject, prefix: str, parents: Sequence[str]) -> None:
-        doc = next(d for d in proj.documents() if d.prefix == prefix)
+        doc = next((d for d in proj.documents() if d.prefix == prefix), None)
+        if doc is None:
+            raise ValueError(f"The document '{prefix}' does not exist in this project.")
         for uid in parents:
             try:
                 parent = proj.get_item(uid)
@@ -103,13 +122,23 @@ class EditService:
                 f"{item.uid} is part of a baseline; every change needs a reason. Enter why you are changing it."
             )
 
-    def _check_values(self, prefix: str, attrs: Mapping[str, Any]) -> None:
-        """Reject values outside the project vocabulary (blank means unset)."""
+    def _check_values(self, prefix: str, attrs: Mapping[str, Any], text: str | None = None) -> None:
+        """Reject what must not reach an item file: unstorable characters, fields that are not part of the document's
+        template (Doorstop's own fields such as links or level among them), and values outside the vocabulary."""
         decl = self._cfg.project.document(prefix)
         if decl is None:
-            return
+            raise ValueError(
+                f"The document '{prefix}' does not exist in this project. Choose one of: {', '.join(d.prefix for d in self._cfg.project.documents)}."
+            )  # noqa: E501
+        if text is not None:
+            textcheck.check("statement", text)
         defs = self._cfg.attribute_defs(decl.kind)
         for name, value in attrs.items():
+            if name not in defs:
+                raise ValueError(
+                    f"'{name}' is not a field of {prefix} items. Use the template fields: {', '.join(sorted(defs))}."
+                )  # noqa: E501
+            textcheck.check(name, value)
             adef = defs.get(name)
             if adef is not None and adef.type == "enum" and adef.vocab and value not in (None, ""):
                 allowed = self._cfg.vocab.values(adef.vocab)
@@ -128,8 +157,9 @@ class EditService:
         why: str = "",
     ) -> ItemData:
         proj = DoorstopProject.open(self.root)
+        self._check_values(prefix, attrs or {}, text)
         self._check_parents(proj, prefix, parents)
-        self._check_values(prefix, attrs or {})
+        history_path(self.root, f"{prefix}-0").parent.mkdir(parents=True, exist_ok=True)  # fail before writing
         decl = self._cfg.project.document(prefix)
         defaults = dict(self._cfg.templates.kinds[decl.kind].defaults) if decl else {}
         item = proj.add_item(prefix, text, attrs={**defaults, **(attrs or {})}, derived=derived)
@@ -143,8 +173,9 @@ class EditService:
     ) -> ItemData:
         proj = DoorstopProject.open(self.root)
         before = proj.get_item(uid)
-        self._check_values(before.document, attrs or {})
+        self._check_values(before.document, attrs or {}, text)
         self.require_reason(before, why)
+        history_path(self.root, uid).parent.mkdir(parents=True, exist_ok=True)  # fail before writing, not after
         changed = [k for k, v in (attrs or {}).items() if before.attrs.get(k) != v]
         if text is not None and text.strip() != before.text.strip():
             changed.append("text")
@@ -163,6 +194,7 @@ class EditService:
         self.require_reason(before, why)
         if not proj.suspect_links(uid):
             return before
+        history_path(self.root, uid).parent.mkdir(parents=True, exist_ok=True)
         proj.clear_suspect(uid)
         self.record(uid, "clear-suspect", ["links"], why)
         return proj.get_item(uid)
@@ -174,6 +206,7 @@ class EditService:
         self._check_parents(proj, before.document, parents)
         if tuple(sorted(parents)) == before.links:
             return before
+        history_path(self.root, uid).parent.mkdir(parents=True, exist_ok=True)
         proj.set_links(uid, parents)
         self.record(uid, "update", ["links"], why)
         return proj.get_item(uid)

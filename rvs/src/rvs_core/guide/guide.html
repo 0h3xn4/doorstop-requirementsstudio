@@ -647,6 +647,14 @@ rvs import my-project items.xlsx --reason &quot;Re-numbered after review&quot;
 <td>An item file cannot be parsed, usually because a hand edit broke the YAML. The message names the file and the line; fix it and open the project again.</td>
 </tr>
 <tr>
+<td><code>RVS-ITEM-NAME</code></td>
+<td>An item file is not named like an ID of its document (for example <code>SYS-0001 copy.yml</code>, or an item of another document in this folder). Rename or remove it.</td>
+</tr>
+<tr>
+<td><code>RVS-VALIDATION-FAILED</code></td>
+<td>Validation stopped unexpectedly, usually because a hand-edited file has content RVS cannot interpret. The message names the kind of error only; check recent edits with <code>git diff</code>.</td>
+</tr>
+<tr>
 <td><code>RVS-DOC-MISSING</code></td>
 <td>A declared document has no folder.</td>
 </tr>

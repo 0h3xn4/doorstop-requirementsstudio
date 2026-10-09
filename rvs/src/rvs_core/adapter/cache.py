@@ -80,5 +80,5 @@ class ItemCache:
             tmp = self._file(prefix).with_suffix(".tmp")
             tmp.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8", newline="\n")
             os.replace(tmp, self._file(prefix))
-        except OSError:
-            pass  # read-only checkout or full disk: the cache is an optimisation only
+        except (OSError, TypeError, ValueError):
+            pass  # read-only checkout, full disk or a value JSON cannot hold: the cache is only an optimisation

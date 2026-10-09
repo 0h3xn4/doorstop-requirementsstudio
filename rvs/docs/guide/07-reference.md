@@ -76,6 +76,8 @@ Every problem has a stable code, a message and a hint on how to fix it.
 | `RVS-SCHEMA-NEWER` | A file is from a newer version of RVS and is refused. |
 | `RVS-TREE-INVALID` | The document tree cannot be read by Doorstop. |
 | `RVS-ITEM-UNREADABLE` | An item file cannot be parsed, usually because a hand edit broke the YAML. The message names the file and the line; fix it and open the project again. |
+| `RVS-ITEM-NAME` | An item file is not named like an ID of its document (for example `SYS-0001 copy.yml`, or an item of another document in this folder). Rename or remove it. |
+| `RVS-VALIDATION-FAILED` | Validation stopped unexpectedly, usually because a hand-edited file has content RVS cannot interpret. The message names the kind of error only; check recent edits with `git diff`. |
 | `RVS-DOC-MISSING` | A declared document has no folder. |
 | `RVS-DOC-UNDECLARED` | A folder is a Doorstop document but is not declared in `rvs-project.yaml`. |
 | `RVS-DOC-PARENT` | A document's parent differs from the declaration. |

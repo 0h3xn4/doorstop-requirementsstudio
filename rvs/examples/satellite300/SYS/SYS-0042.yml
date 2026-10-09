@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.42
+links:
+- MIS-0006: C2VfyI-uDx78NPBJ47ee81w7cnqYCWwMdcGjZaNtw8I=
+normative: true
+owner: sys
+priority: low
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The spacecraft shall provide 60 W orbit-average power to the payload.
+title: 'Power 60 #42'
+type: performance
+verify_level: system
+verify_method: analysis

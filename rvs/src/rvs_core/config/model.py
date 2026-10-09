@@ -107,6 +107,12 @@ class Standards:
 
 
 @dataclass(frozen=True)
+class Glossary:
+    terms: tuple[tuple[str, str], ...]
+    acronyms: Mapping[str, str]
+
+
+@dataclass(frozen=True)
 class ProjectConfig:
     project: ProjectFile
     numbering: Numbering
@@ -115,6 +121,7 @@ class ProjectConfig:
     rules: Mapping[str, Any]
     exports: Mapping[str, Any]
     standards: Standards
+    glossary: Glossary
 
     def attribute_defs(self, kind: str) -> dict[str, AttributeDef]:
         defs = {a.name: a for a in self.templates.kinds[kind].attributes}

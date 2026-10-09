@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.27
+links:
+- MIS-0003: Zh-b-zM9jC8D2fergfJxLBZkW3a9Ae45UT3JAEXNJu0=
+normative: true
+owner: sys
+priority: low
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The spacecraft shall provide 15 W orbit-average power to the payload.
+title: 'Power 15 #27'
+type: performance
+verify_level: system
+verify_method: analysis

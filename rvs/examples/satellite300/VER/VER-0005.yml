@@ -1,0 +1,18 @@
+active: true
+derived: true
+header: ''
+level: 1.5
+link_verifies:
+- EPS-0022
+links: []
+normative: true
+proc_id: VER-EPS-0022
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+text: |
+  Verify EPS-0022 by test.
+title: Verify EPS-0022
+v_status: waived
+verify_level: subsystem
+verify_method: test

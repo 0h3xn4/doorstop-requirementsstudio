@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.17
+links:
+- SYS-0017: M1tdcq3FAbKwnrD06vKhVPlTZ0DYNS2fSbTwaa4AZSM=
+normative: true
+owner: pld
+priority: medium
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: approved
+text: |
+  The payload shall image a swath of at least 2 km.
+title: 'Swath 2 #17'
+type: performance
+verify_level: subsystem
+verify_method: test

@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.23
+links:
+- SYS-0023: 1CULhGbvQ4XCSR1yM21vRgUSaJ23sPbJLGBH-qPua-s=
+normative: true
+owner: str
+priority: medium
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The structure shall withstand a quasi-static load of 100 g.
+title: 'Load 100 #23'
+type: environmental
+verify_level: subsystem
+verify_method: analysis

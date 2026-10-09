@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.1
+links:
+- SYS-0001: G9Ywr_JJNE_NbFnXLG3u8PwG4XsSSkrE3c8kEtPVQsc=
+normative: true
+owner: thm
+priority: high
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: approved
+text: |
+  The thermal control shall keep the battery above -10 degrees Celsius.
+title: 'Battery temp -10 #1'
+type: performance
+verify_level: subsystem
+verify_method: analysis

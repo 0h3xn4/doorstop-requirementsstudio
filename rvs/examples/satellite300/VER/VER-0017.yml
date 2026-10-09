@@ -1,0 +1,18 @@
+active: true
+derived: true
+header: ''
+level: 1.17
+link_verifies:
+- AOCS-0002
+links: []
+normative: true
+proc_id: VER-AOCS-0002
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+text: |
+  Verify AOCS-0002 by test.
+title: Verify AOCS-0002
+v_status: passed
+verify_level: subsystem
+verify_method: test

@@ -50,7 +50,7 @@ QHeaderView::section {{ background: {t["layer"]}; border: none; border-bottom: 1
     padding: 6px 8px; font-weight: 600; }}
 QTableView, QTreeView {{ gridline-color: {t["border"]}; alternate-background-color: {t["layer"]}; }}
 QLineEdit, QTextEdit, QPlainTextEdit, QComboBox {{ background: {t["layer"]};
-    border: none; border-bottom: 1px solid {t["border_strong"]}; padding: 6px 8px; }}
+    border: none; border-bottom: 1px solid {t["border_strong"]}; padding: 6px 8px; min-height: 22px; }}
 QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus {{ border: 2px solid {t["interactive"]}; }}
 QLabel#Empty {{ color: {t["text_secondary"]}; background: transparent; }}
 """

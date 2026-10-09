@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.34
+links:
+- SYS-0034: 0btQLFuP12ixcyPClAux9h6GVY1qhADHMj56bQdPsAI=
+normative: true
+owner: ttc
+priority: high
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The TT&C subsystem shall accept telecommands at 20 kbit/s.
+title: 'Uplink 20 #34'
+type: interface
+verify_level: subsystem
+verify_method: test

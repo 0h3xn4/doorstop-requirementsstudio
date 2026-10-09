@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.18
+links:
+- SYS-0018: 7kfchlzqM-XrTmd4_PRfmxR4TrIglDD1XT-JuHJu3kw=
+normative: true
+owner: aocs
+priority: low
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The AOCS shall reduce the angular rate below 10 degrees per second after separation.
+title: 'Detumble 10 #18'
+type: functional
+verify_level: subsystem
+verify_method: test

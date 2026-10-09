@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.4
+links:
+- SYS-0004: VoTQwopRFJCnFFp56bT_ITIfzwVMtWg69IeCyCw00sk=
+normative: true
+owner: str
+priority: high
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The structure shall have a first natural frequency above 10 Hz.
+title: 'Frequency 10 #4'
+type: performance
+verify_level: subsystem
+verify_method: test

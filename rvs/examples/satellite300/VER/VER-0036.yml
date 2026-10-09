@@ -1,0 +1,18 @@
+active: true
+derived: true
+header: ''
+level: 1.36
+link_verifies:
+- STR-0022
+links: []
+normative: true
+proc_id: VER-STR-0022
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+text: |
+  Verify STR-0022 by test.
+title: Verify STR-0022
+v_status: planned
+verify_level: subsystem
+verify_method: test

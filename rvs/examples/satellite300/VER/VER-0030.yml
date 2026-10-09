@@ -1,0 +1,18 @@
+active: true
+derived: true
+header: ''
+level: '1.30'
+link_verifies:
+- TTC-0027
+links: []
+normative: true
+proc_id: VER-TTC-0027
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+text: |
+  Verify TTC-0027 by analysis.
+title: Verify TTC-0027
+v_status: in-progress
+verify_level: subsystem
+verify_method: analysis

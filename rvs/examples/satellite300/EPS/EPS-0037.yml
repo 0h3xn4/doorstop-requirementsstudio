@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.37
+links:
+- SYS-0037: 1nXykVaFqi7pi5i26FMvMckS28_O_dkkpE0Y_jwEmxc=
+normative: true
+owner: eps
+priority: high
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The EPS shall provide a regulated 5 V main bus.
+title: 'Bus voltage 5 #37'
+type: functional
+verify_level: subsystem
+verify_method: test

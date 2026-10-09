@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.18
+links:
+- SYS-0018: 7kfchlzqM-XrTmd4_PRfmxR4TrIglDD1XT-JuHJu3kw=
+normative: true
+owner: ttc
+priority: low
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The TT&C subsystem shall accept telecommands at 435 kbit/s.
+title: 'Uplink 435 #18'
+type: interface
+verify_level: subsystem
+verify_method: test

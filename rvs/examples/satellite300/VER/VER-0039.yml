@@ -1,0 +1,18 @@
+active: true
+derived: true
+header: ''
+level: 1.39
+link_verifies:
+- PLD-0012
+links: []
+normative: true
+proc_id: VER-PLD-0012
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+text: |
+  Verify PLD-0012 by test.
+title: Verify PLD-0012
+v_status: failed
+verify_level: subsystem
+verify_method: test

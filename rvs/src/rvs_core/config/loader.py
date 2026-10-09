@@ -9,6 +9,7 @@ import yaml
 from rvs_core.config.model import (
     AttributeDef,
     DocumentDecl,
+    Glossary,
     KindTemplate,
     Numbering,
     ProjectConfig,
@@ -27,7 +28,7 @@ PROJECT_FILE = "rvs-project.yaml"
 RESERVED_ATTRIBUTES = frozenset(
     {"level", "active", "normative", "derived", "reviewed", "text", "ref", "references", "links", "header"}
 )
-CONFIG_NAMES = ("numbering", "vocab", "templates", "rules", "exports", "standards")
+CONFIG_NAMES = ("numbering", "vocab", "templates", "rules", "exports", "standards", "glossary")
 
 
 def _parse(text: str, source: str) -> dict[str, Any]:
@@ -139,5 +140,9 @@ def load_project_config(root: Path) -> tuple[ProjectConfig, list[Finding]]:
         loaded["rules"],
         loaded["exports"],
         Standards(tuple(loaded["standards"]["placeholders"])),
+        Glossary(
+            tuple((t["term"], t["definition"]) for t in loaded["glossary"]["terms"]),
+            {a["acronym"]: a["expansion"] for a in loaded["glossary"]["acronyms"]},
+        ),
     )
     return cfg, findings

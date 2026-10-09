@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+import yaml
+
 from rvs_core.adapter import DoorstopProject
 from rvs_core.config.model import DocumentDecl
 from rvs_core.project import create_project
@@ -27,6 +29,14 @@ def _req(title: str, rtype: str, method: str, level: str, status: str = "draft")
 
 def build_minimal_project(root: Path) -> DoorstopProject:
     proj = create_project(root, "Minimal example", DOCS)
+    glossary = {
+        "rvs_schema_version": 1,
+        "terms": [],
+        "acronyms": [{"acronym": "EPS", "expansion": "Electrical Power Subsystem"}],
+    }
+    (root / "config" / "glossary.yaml").write_text(
+        yaml.safe_dump(glossary, sort_keys=True), encoding="utf-8", newline="\n"
+    )
     # SYS: three requirements and one heading (created last so its UID is SYS-0004)
     sys1 = proj.add_item(
         "SYS",

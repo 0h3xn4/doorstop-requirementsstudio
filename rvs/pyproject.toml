@@ -61,6 +61,7 @@ ignore = ["S101", "S603", "S404", "E501"]  # long user-facing message strings ar
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S"]
+"src/rvs_core/adapter/__init__.py" = ["E402"]  # offline guard must run before Doorstop is imported
 
 [tool.mypy]
 strict = true

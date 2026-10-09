@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.8
+links:
+- SYS-0008: jwPCTffENoy_RZYSwa3w6uIhz_GKh-B-6LIsoTfOgds=
+normative: true
+owner: eps
+priority: medium
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The PCDU shall switch off non-essential loads below 28 percent state of charge.
+title: 'PCDU 28 #8'
+type: functional
+verify_level: subsystem
+verify_method: test

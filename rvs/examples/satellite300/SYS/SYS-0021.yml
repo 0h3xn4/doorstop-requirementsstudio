@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.21
+links:
+- MIS-0009: wdXPFruSiLuvIYAjdghDPUWpy5NFPA1glziQOX28M90=
+normative: true
+owner: sys
+priority: low
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: reviewed
+text: |
+  The spacecraft launch mass shall not exceed 120 kg.
+title: 'Mass 120 #21'
+type: design
+verify_level: system
+verify_method: inspection

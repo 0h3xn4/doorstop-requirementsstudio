@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.44
+links:
+- MIS-0008: TtDF3P9UCbZoPrlMvbvuZTbkoMRI9v6-hvDyKib20Ls=
+normative: true
+owner: sys
+priority: medium
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The spacecraft shall point the payload with an error below 60 arcseconds.
+title: 'Pointing 60 #44'
+type: performance
+verify_level: system
+verify_method: analysis

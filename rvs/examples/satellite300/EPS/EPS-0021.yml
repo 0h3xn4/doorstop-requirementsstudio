@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.21
+links:
+- SYS-0021: v850U3A7QURAwmPTcYL5x0y5028Z4XAUQaoRYiT_1O0=
+normative: true
+owner: eps
+priority: low
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: reviewed
+text: |
+  The EPS shall provide a regulated 50 V main bus.
+title: 'Bus voltage 50 #21'
+type: functional
+verify_level: subsystem
+verify_method: test

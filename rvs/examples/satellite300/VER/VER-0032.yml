@@ -1,0 +1,18 @@
+active: true
+derived: true
+header: ''
+level: 1.32
+link_verifies:
+- STR-0002
+links: []
+normative: true
+proc_id: VER-STR-0002
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+text: |
+  Verify STR-0002 by analysis.
+title: Verify STR-0002
+v_status: failed
+verify_level: subsystem
+verify_method: analysis

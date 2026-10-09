@@ -1,0 +1,18 @@
+active: true
+derived: true
+header: ''
+level: 1.42
+link_verifies:
+- PLD-0027
+links: []
+normative: true
+proc_id: VER-PLD-0027
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+text: |
+  Verify PLD-0027 by test.
+title: Verify PLD-0027
+v_status: planned
+verify_level: subsystem
+verify_method: test

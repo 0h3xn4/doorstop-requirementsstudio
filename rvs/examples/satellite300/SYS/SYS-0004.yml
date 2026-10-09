@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.4
+links:
+- MIS-0004: 06MvCy4GlTt-Uv19Zgi85ez0TsN0oUb7nWYegZ84YBc=
+normative: true
+owner: sys
+priority: high
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The spacecraft shall point the payload with an error below 28 arcseconds.
+title: 'Pointing 28 #4'
+type: performance
+verify_level: system
+verify_method: analysis

@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.5
+links:
+- SYS-0005: Q8w82j9vtdHrik_PUmv9O_IHnZQHx4vlc4B6x124IuE=
+normative: true
+owner: thm
+priority: medium
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The thermal control shall limit heater power to 50 W.
+title: 'Heater 50 #5'
+type: performance
+verify_level: subsystem
+verify_method: test

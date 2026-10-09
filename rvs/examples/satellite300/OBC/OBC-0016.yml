@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.16
+links:
+- SYS-0016: v35o5ZOHbTPbNWsAqm0EnT0Cc0TWLBlZhVVQ_oZwIW8=
+normative: true
+owner: obc
+priority: high
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: reviewed
+text: |
+  The OBC shall reset itself if the watchdog is not serviced within 100 seconds.
+title: 'Watchdog 100 #16'
+type: functional
+verify_level: subsystem
+verify_method: test

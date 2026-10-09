@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: '1.20'
+links:
+- MIS-0008: TtDF3P9UCbZoPrlMvbvuZTbkoMRI9v6-hvDyKib20Ls=
+normative: true
+owner: sys
+priority: medium
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The spacecraft shall survive a hot case of 95 degrees Celsius.
+title: 'Temperature 95 #20'
+type: environmental
+verify_level: system
+verify_method: test

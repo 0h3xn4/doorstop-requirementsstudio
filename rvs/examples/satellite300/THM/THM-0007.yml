@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.7
+links:
+- SYS-0007: k3sYca4JqigXMVKll29BUppFoDFJPfiCBo4hx-2HCZI=
+normative: true
+owner: thm
+priority: high
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The thermal control shall keep the battery above 5 degrees Celsius.
+title: 'Battery temp 5 #7'
+type: performance
+verify_level: subsystem
+verify_method: analysis

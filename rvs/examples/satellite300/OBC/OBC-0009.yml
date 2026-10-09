@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.9
+links:
+- SYS-0009: 4f13MQQ-Zs6gGTS2dnDHkwJZqDkZpZxOZ7AyiznJtC4=
+normative: true
+owner: obc
+priority: low
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The OBC shall provide at least 256 MB of non-volatile storage.
+title: 'Memory 256 #9'
+type: performance
+verify_level: subsystem
+verify_method: inspection

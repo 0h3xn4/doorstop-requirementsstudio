@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.18
+links:
+- SYS-0018: 7kfchlzqM-XrTmd4_PRfmxR4TrIglDD1XT-JuHJu3kw=
+normative: true
+owner: pld
+priority: low
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The payload shall generate no more than 2 Mbit/s of raw data.
+title: 'Data rate 2 #18'
+type: interface
+verify_level: subsystem
+verify_method: test

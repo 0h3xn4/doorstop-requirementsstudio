@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.23
+links:
+- SYS-0023: 1CULhGbvQ4XCSR1yM21vRgUSaJ23sPbJLGBH-qPua-s=
+normative: true
+owner: ttc
+priority: medium
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The UHF link shall have a margin of at least 9.6 dB.
+title: 'Link margin 9.6 #23'
+type: performance
+verify_level: subsystem
+verify_method: analysis

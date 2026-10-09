@@ -1,0 +1,18 @@
+active: true
+derived: true
+header: ''
+level: 1.35
+link_verifies:
+- STR-0017
+links: []
+normative: true
+proc_id: VER-STR-0017
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+text: |
+  Verify STR-0017 by analysis.
+title: Verify STR-0017
+v_status: planned
+verify_level: subsystem
+verify_method: analysis

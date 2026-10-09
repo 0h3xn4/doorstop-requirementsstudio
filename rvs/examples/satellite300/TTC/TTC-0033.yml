@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.33
+links:
+- SYS-0033: dBLDjTq1AzNC1q_DIYP2VB3h-0-lpXAXIh3RoQcsnNk=
+normative: true
+owner: ttc
+priority: low
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The TT&C subsystem shall support a downlink rate of 20 kbit/s.
+title: 'Downlink 20 #33'
+type: performance
+verify_level: subsystem
+verify_method: test

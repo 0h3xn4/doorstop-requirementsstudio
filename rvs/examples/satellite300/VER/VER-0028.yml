@@ -1,0 +1,18 @@
+active: true
+derived: true
+header: ''
+level: 1.28
+link_verifies:
+- TTC-0017
+links: []
+normative: true
+proc_id: VER-TTC-0017
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+text: |
+  Verify TTC-0017 by test.
+title: Verify TTC-0017
+v_status: planned
+verify_level: subsystem
+verify_method: test

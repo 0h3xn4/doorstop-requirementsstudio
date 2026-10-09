@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.22
+links:
+- SYS-0022: IQreewlzgedHzyn84Y-WzOyzMPcVytbbOBk-r5cuAJg=
+normative: true
+owner: obc
+priority: high
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: approved
+text: |
+  The OBC shall execute the control cycle every 8 ms.
+title: 'Cycle 8 #22'
+type: performance
+verify_level: subsystem
+verify_method: test

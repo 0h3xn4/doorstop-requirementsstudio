@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.37
+links:
+- MIS-0001: 19L2LHp0BJJ9OQTgJUk3y841kgBfuz43Y3GTnGbYoLw=
+normative: true
+owner: sys
+priority: high
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The spacecraft shall provide 40 W orbit-average power to the payload.
+title: 'Power 40 #37'
+type: performance
+verify_level: system
+verify_method: analysis

@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.12
+links:
+- SYS-0012: nVF9cZL9oim5rvM2iMeviLCeVEhRhC2DlZdY6YYz7KU=
+normative: true
+owner: ttc
+priority: low
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The RF output power shall not exceed 2 dBm.
+title: 'RF output 2 #12'
+type: design
+verify_level: subsystem
+verify_method: test

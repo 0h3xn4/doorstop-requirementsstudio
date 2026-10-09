@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.35
+links:
+- MIS-0011: Ux_Btbopxh40OnWEGjo5a2t-ZgziNGBcH4xWuqPWr20=
+normative: true
+owner: sys
+priority: medium
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The spacecraft shall survive a hot case of 28 degrees Celsius.
+title: 'Temperature 28 #35'
+type: environmental
+verify_level: system
+verify_method: test

@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.18
+links:
+- SYS-0018: 7kfchlzqM-XrTmd4_PRfmxR4TrIglDD1XT-JuHJu3kw=
+normative: true
+owner: eps
+priority: low
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The EPS shall store at least 12 Wh in the battery.
+title: 'Battery 12 #18'
+type: performance
+verify_level: subsystem
+verify_method: test

@@ -13,7 +13,7 @@ Rule for every milestone: tests first; mypy + ruff clean; offline test and `door
 - Spike: 5,000-item load timing.
 - **Accept:** `doorstop` CLI passes on minimal project; byte-identical regeneration; migration tests; validate returns stable exit codes.
 
-## M2 Authoring
+## M2 Authoring  *(done — see docs/demo/M2.md)*
 - Tree + table views, editor (form + Markdown + preview), quality rules and Problems panel with jump links, glossary/acronym highlighting, edit with who/why recorded, satellite300 project generator.
 - **Accept:** every rule has positive/negative unit tests; pytest-qt create/edit/save flow.
 

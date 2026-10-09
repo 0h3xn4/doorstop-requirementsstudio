@@ -60,6 +60,14 @@ class ItemData:
     attrs: Mapping[str, Any] = field(default_factory=dict)  # RVS extended attributes
     path: str = ""  # relative to the project folder
 
+    @property
+    def level_key(self) -> tuple[int, ...]:
+        """Sort key for the dotted level ("1.10" after "1.9"); headings (x.0) sort first."""
+        try:
+            return tuple(int(p) for p in self.level.split("."))
+        except ValueError:
+            return (10**9,)
+
 
 @dataclass(frozen=True)
 class Issue:
@@ -224,6 +232,20 @@ class DoorstopProject:
         child = self._item(child_uid)
         child.link(parent_uid)
         child.clear([parent_uid])  # stamp the new link so it is not suspect
+
+    def set_links(self, uid: str, parents: Iterable[str]) -> None:
+        """Replace the item's Doorstop parent links; each new link is stamped so it is not suspect."""
+        item = self._item(uid)
+        wanted = sorted(set(parents))
+        for parent in wanted:
+            self._item(parent)
+        for current in [str(u) for u in item.links]:
+            if current not in wanted:
+                item.unlink(current)
+        for parent in wanted:
+            if parent not in [str(u) for u in item.links]:
+                item.link(parent)
+        item.clear(wanted)
 
     def suspect_links(self, uid: str) -> tuple[str, ...]:
         item = self._item(uid)

@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.22
+links:
+- MIS-0010: iejWaNzjxJMuIuSZ9ExiuhEOOX6_G6oVKrmVwr4nJjI=
+normative: true
+owner: sys
+priority: high
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The spacecraft shall provide 120 W orbit-average power to the payload.
+title: 'Power 120 #22'
+type: performance
+verify_level: system
+verify_method: analysis

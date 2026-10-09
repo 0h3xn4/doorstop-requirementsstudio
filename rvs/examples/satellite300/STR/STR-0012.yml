@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.12
+links:
+- SYS-0012: nVF9cZL9oim5rvM2iMeviLCeVEhRhC2DlZdY6YYz7KU=
+normative: true
+owner: str
+priority: low
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: approved
+text: |
+  The primary structure mass shall not exceed 12 kg.
+title: 'Mass 12 #12'
+type: design
+verify_level: subsystem
+verify_method: inspection

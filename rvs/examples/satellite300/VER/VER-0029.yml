@@ -1,0 +1,18 @@
+active: true
+derived: true
+header: ''
+level: 1.29
+link_verifies:
+- TTC-0022
+links: []
+normative: true
+proc_id: VER-TTC-0022
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+text: |
+  Verify TTC-0022 by test.
+title: Verify TTC-0022
+v_status: planned
+verify_level: subsystem
+verify_method: test

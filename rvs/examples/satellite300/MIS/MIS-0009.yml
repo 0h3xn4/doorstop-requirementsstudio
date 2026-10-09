@@ -1,0 +1,18 @@
+active: true
+derived: false
+header: ''
+level: 1.9
+links: []
+normative: true
+owner: mis
+priority: low
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The mission shall return at least 650 GB of payload data per day.
+title: 'Data return 650 #9'
+type: performance
+verify_level: system
+verify_method: test

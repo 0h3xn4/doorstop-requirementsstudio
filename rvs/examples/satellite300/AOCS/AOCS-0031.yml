@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.31
+links:
+- SYS-0031: siu_KmiPbjSLWOELrHe6mPSftxKcAUlG1TEji1NO1R8=
+normative: true
+owner: aocs
+priority: high
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: reviewed
+text: |
+  The AOCS shall slew the spacecraft by 30 degrees within 1 minutes.
+title: 'Slew 1 #31'
+type: performance
+verify_level: subsystem
+verify_method: test

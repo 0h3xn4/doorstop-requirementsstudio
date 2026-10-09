@@ -5,12 +5,6 @@ import sys
 import textwrap
 from pathlib import Path
 
-# Doorstop 3.2's own transitive imports (reviewed, see docs/DEVIATIONS.md V01).
-ALLOWED_TRANSITIVE = {"requests", "urllib3", "bottle", "http", "http.client", "http.server",
-                      "http.cookiejar", "http.cookies", "urllib", "urllib.request",
-                      "urllib.error", "urllib.response", "urllib.parse", "ssl",
-                      "socket", "socketserver", "asyncio"}  # fmt: skip
-
 PROBE = textwrap.dedent(
     """
     import os, sys, socket
@@ -34,8 +28,11 @@ PROBE = textwrap.dedent(
     assert report.exit_code == 0, [f.format() for f in report.findings]
     import json
     banned = sorted(m for m in sys.modules if m.split(".")[0] in {
-        "requests", "urllib3", "bottle", "ftplib", "smtplib", "xmlrpc"}
-        or m in {"http.client", "http.server", "ssl", "PySide6.QtNetwork"})
+        "requests", "urllib3", "bottle", "plantuml_markdown", "ftplib", "smtplib", "xmlrpc", "socketserver",
+        "ssl", "asyncio", "telnetlib", "imaplib", "poplib"}
+        or m in {"http.client", "http.server", "urllib.request", "PySide6.QtNetwork"})
+    # RVS registers inert placeholders for bottle/plantuml_markdown; only real (file-backed) modules count.
+    banned = [m for m in banned if getattr(sys.modules[m], "__file__", None)]
     print(json.dumps({"opened": opened, "network_modules": banned,
                       "doorstop_loaded": "doorstop" in sys.modules}))
     """
@@ -53,8 +50,6 @@ def test_app_starts_with_networking_disabled():
     assert out.returncode == 0, out.stderr
     data = json.loads(out.stdout.strip().splitlines()[-1])
     assert data["opened"] == []
-    allowed = ALLOWED_TRANSITIVE if data["doorstop_loaded"] else set()
-    unexpected = [m for m in data["network_modules"] if m not in allowed
-                  and m.split(".")[0] not in allowed]  # fmt: skip
-    assert not unexpected, unexpected
-    assert "PySide6.QtNetwork" not in data["network_modules"]
+    assert data["doorstop_loaded"]
+    # Strict (V01 resolved): no network-capable module is imported at all, Doorstop included.
+    assert data["network_modules"] == []

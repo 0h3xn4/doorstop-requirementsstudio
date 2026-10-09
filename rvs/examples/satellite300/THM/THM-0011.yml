@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.11
+links:
+- SYS-0011: ayJ7njsHz7_qS4fD5ME-tjzCu-POamNJeDIu6hRXS88=
+normative: true
+owner: thm
+priority: medium
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: reviewed
+text: |
+  The thermal control shall limit heater power to -30 W.
+title: 'Heater -30 #11'
+type: performance
+verify_level: subsystem
+verify_method: test

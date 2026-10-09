@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.33
+links:
+- SYS-0033: dBLDjTq1AzNC1q_DIYP2VB3h-0-lpXAXIh3RoQcsnNk=
+normative: true
+owner: aocs
+priority: low
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The AOCS shall estimate attitude with an error below 5 degrees.
+title: 'Accuracy 5 #33'
+type: performance
+verify_level: subsystem
+verify_method: analysis

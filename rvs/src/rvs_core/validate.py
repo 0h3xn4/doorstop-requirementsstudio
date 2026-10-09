@@ -9,6 +9,7 @@ from typing import Any
 from rvs_core.adapter import DocumentInfo, DoorstopProject, ItemData, ProjectError
 from rvs_core.config import ConfigError, ProjectConfig, load_project_config
 from rvs_core.findings import Finding, Severity, sort_findings
+from rvs_core.rules import build_context, run_rules
 from rvs_core.schema.versioning import VERSION_KEY, SchemaVersionError, migrate
 
 FATAL_CODES = frozenset(
@@ -188,8 +189,8 @@ def _item_check(cfg: ProjectConfig):  # type: ignore[no-untyped-def]
                     )
                 )
                 continue
-            if value is None:
-                continue
+            if value is None or value == "":
+                continue  # unset; required/rule checks handle missing values
             if not _type_ok(adef.type, value):
                 out.append(
                     Finding(
@@ -240,7 +241,23 @@ def cfg_version() -> int:
 def _doorstop_finding(level: str, message: str) -> Finding:
     parts = message.split(": ", 2)
     uid = parts[1] if len(parts) > 2 and _UID.match(parts[1]) else ""
-    if "unreviewed changes" in message:
+    if "no links from child document" in message:
+        return Finding(
+            "DOORSTOP-NO-CHILD-LINKS",
+            Severity.WARNING,
+            message,
+            "Allocate or derive an item in the child document from it, or ignore it if no allocation is needed.",
+            uid=uid,
+        )
+    if "suspect link" in message:
+        return Finding(
+            "DOORSTOP-SUSPECT-LINK",
+            Severity.WARNING,
+            message,
+            "The parent changed after this link was made: review the change, then clear the suspect link.",
+            uid=uid,
+        )
+    if "unreviewed changes" in message or "needs initial review" in message:
         return Finding(
             "DOORSTOP-UNREVIEWED",
             Severity.INFO,
@@ -279,7 +296,10 @@ def validate_project(root: Path, *, strict: bool = False) -> ValidationReport:
 
     for issue in issues:
         findings.append(issue.finding if issue.finding else _doorstop_finding(issue.level, issue.message))
-    on_disk = {d.prefix for d in project.documents()}
+    docs = project.documents()
+    items = project.items()
+    findings.extend(run_rules(build_context(cfg, items, docs)))
+    on_disk = {d.prefix for d in docs}
     for decl in cfg.project.documents:
         if decl.prefix not in on_disk:
             findings.append(

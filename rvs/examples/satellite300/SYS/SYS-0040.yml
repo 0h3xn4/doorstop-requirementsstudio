@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: '1.40'
+links:
+- MIS-0004: 06MvCy4GlTt-Uv19Zgi85ez0TsN0oUb7nWYegZ84YBc=
+normative: true
+owner: sys
+priority: high
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The spacecraft shall survive a hot case of 40 degrees Celsius.
+title: 'Temperature 40 #40'
+type: environmental
+verify_level: system
+verify_method: test

@@ -1,6 +1,1 @@
-{"$schema": "http://json-schema.org/draft-07/schema#", "type": "object", "additionalProperties": false,
- "required": ["rvs_schema_version", "rules"],
- "properties": {"rvs_schema_version": {"type": "integer", "minimum": 0}, "rules": {"type": "array", "items": {"type": "object", "additionalProperties": false,
-  "required": ["id", "severity", "enabled"],
-  "properties": {"id": {"type": "string", "pattern": "^[a-z][a-z0-9-]*$"}, "severity": {"enum": ["error", "warning", "info"]},
-   "enabled": {"type": "boolean"}, "description": {"type": "string"}, "params": {"type": "object"}}}}}}
+{"$schema": "http://json-schema.org/draft-07/schema#", "type": "object", "additionalProperties": false, "required": ["rvs_schema_version", "rules"], "properties": {"rvs_schema_version": {"type": "integer", "minimum": 0}, "rules": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["id", "severity", "enabled"], "properties": {"id": {"type": "string", "pattern": "^[a-z][a-z0-9-]*$"}, "severity": {"enum": ["error", "warning", "info"]}, "enabled": {"type": "boolean"}, "description": {"type": "string"}, "params": {"type": "object"}}}}, "change_control": {"type": "object", "additionalProperties": false, "required": ["reason_required_statuses"], "properties": {"reason_required_statuses": {"type": "array", "items": {"type": "string"}}}}}}

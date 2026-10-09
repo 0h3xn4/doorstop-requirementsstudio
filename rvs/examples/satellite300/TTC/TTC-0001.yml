@@ -1,0 +1,18 @@
+active: true
+derived: false
+header: ''
+level: 1.1
+links: []
+normative: true
+owner: ttc
+priority: high
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: reviewed
+text: |
+  The TT&C subsystem shall support a downlink rate of 9.6 kbit/s.
+title: 'Downlink 9.6 #1'
+type: performance
+verify_level: subsystem
+verify_method: test

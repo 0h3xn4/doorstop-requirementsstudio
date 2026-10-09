@@ -67,6 +67,11 @@ project/
 - `rvs_core.validate.validate_project` = config load + schema versions + RVS hooks (documents, items) + Doorstop's own validation, all read-only (V09). Findings carry code, severity, message, hint, location, uid.
 - Performance spike (5,000 items): open 0.01 s (lazy), read all 4.4 s, full validate 15.6 s, build 62 s. Target (open < 3 s) needs the index cache (D27) in M3.
 
+## 5b. As built in M2
+- `rvs_core.rules` (8 rules, config-driven), `rvs_core.glossary`, `rvs_core.authoring.EditService` (create/update/set_parents + history), `rvs_core.examples.satellite`.
+- `rvs_gui`: `ProjectSession` -> models (`ItemTableModel`/`ItemFilterProxy`/`FindingsModel`) -> widgets (`DocumentTree`, `RequirementEditor`, `ProblemsPanel`, `InlineNotification`) -> `MainWindow`. The editor form is generated from `config/templates.yaml`, so project-specific free attributes appear without code changes.
+- Strict offline guard (`adapter/_offline_guard.py`, DEVIATIONS V01).
+
 ## 6. Risks
 1. Doorstop's transitive network libs vs. offline test (DEVIATIONS V01).
 2. Doorstop load time at 5,000 items — benchmark in M1 spike; fallback is the one-pass cached index.

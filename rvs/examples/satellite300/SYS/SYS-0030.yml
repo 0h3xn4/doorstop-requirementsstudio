@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: '1.30'
+links:
+- MIS-0006: C2VfyI-uDx78NPBJ47ee81w7cnqYCWwMdcGjZaNtw8I=
+normative: true
+owner: sys
+priority: low
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The spacecraft shall survive a hot case of 15 degrees Celsius.
+title: 'Temperature 15 #30'
+type: environmental
+verify_level: system
+verify_method: test

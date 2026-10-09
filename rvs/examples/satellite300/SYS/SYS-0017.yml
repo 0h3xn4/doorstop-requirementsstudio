@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.17
+links:
+- MIS-0005: 37qCRlUMqGvfjJArURO5iznr9LFZw1BwCLYgLeUixNg=
+normative: true
+owner: sys
+priority: medium
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The spacecraft shall provide 95 W orbit-average power to the payload.
+title: 'Power 95 #17'
+type: performance
+verify_level: system
+verify_method: analysis

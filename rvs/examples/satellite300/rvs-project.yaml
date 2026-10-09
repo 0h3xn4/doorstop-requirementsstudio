@@ -1,0 +1,42 @@
+documents:
+- kind: requirements
+  prefix: MIS
+  title: Mission requirements
+- kind: requirements
+  parent: MIS
+  prefix: SYS
+  title: System requirements
+- kind: requirements
+  parent: SYS
+  prefix: EPS
+  title: Electrical power subsystem
+- kind: requirements
+  parent: SYS
+  prefix: OBC
+  title: On-board computer
+- kind: requirements
+  parent: SYS
+  prefix: AOCS
+  title: Attitude and orbit control
+- kind: requirements
+  parent: SYS
+  prefix: TTC
+  title: Telemetry, tracking and command
+- kind: requirements
+  parent: SYS
+  prefix: STR
+  title: Structure
+- kind: requirements
+  parent: SYS
+  prefix: THM
+  title: Thermal control
+- kind: requirements
+  parent: SYS
+  prefix: PLD
+  title: Payload
+- kind: verification
+  parent: SYS
+  prefix: VER
+  title: Verification plan
+name: Example satellite (fictional data)
+rvs_schema_version: 1

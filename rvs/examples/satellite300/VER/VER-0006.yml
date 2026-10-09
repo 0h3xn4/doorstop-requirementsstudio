@@ -1,0 +1,18 @@
+active: true
+derived: true
+header: ''
+level: 1.6
+link_verifies:
+- EPS-0027
+links: []
+normative: true
+proc_id: VER-EPS-0027
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+text: |
+  Verify EPS-0027 by analysis.
+title: Verify EPS-0027
+v_status: passed
+verify_level: subsystem
+verify_method: analysis

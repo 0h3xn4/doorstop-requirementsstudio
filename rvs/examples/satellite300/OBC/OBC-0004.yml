@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.4
+links:
+- SYS-0004: VoTQwopRFJCnFFp56bT_ITIfzwVMtWg69IeCyCw00sk=
+normative: true
+owner: obc
+priority: high
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The OBC shall reset itself if the watchdog is not serviced within 8 seconds.
+title: 'Watchdog 8 #4'
+type: functional
+verify_level: subsystem
+verify_method: test

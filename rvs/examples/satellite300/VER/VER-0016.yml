@@ -1,0 +1,18 @@
+active: true
+derived: true
+header: ''
+level: 1.16
+link_verifies:
+- OBC-0037
+links: []
+normative: true
+proc_id: VER-OBC-0037
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+text: |
+  Verify OBC-0037 by inspection.
+title: Verify OBC-0037
+v_status: in-progress
+verify_level: subsystem
+verify_method: inspection

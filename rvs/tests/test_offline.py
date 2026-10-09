@@ -32,7 +32,7 @@ PROBE = textwrap.dedent(
     from rvs_core.matrices import Provenance
     prov = Provenance("0", "3", "p", "w", datetime(2026, 1, 1), "u")
     outs = all_outputs(report.config, report.items, report.graph, prov, trace=("SYS", "EPS", "down"), impact_uid="SYS-0002")
-    assert len(outs) == 29 and all(outs.values())
+    assert len(outs) == 30 and all(outs.values())
     # baselines (Git via dulwich) and diffs must work offline too
     import shutil, tempfile
     from pathlib import Path

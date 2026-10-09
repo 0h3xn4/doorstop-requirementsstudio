@@ -8,10 +8,11 @@ from rvs_core.config import ProjectConfig
 from rvs_core.exporters import DOC_FORMATS, render_doc, render_table
 from rvs_core.exporters.builders import spec_doc
 from rvs_core.exporters.itemsio import export_items_csv, export_items_xlsx
+from rvs_core.exporters.reqif import export_reqif
 from rvs_core.matrices import Provenance, VcmFilter, build_traceability, build_vcm, coverage_table, impact_table
 from rvs_core.trace import LinkGraph, coverage, impact
 
-KINDS = ("vcm", "trace", "coverage", "impact", "items", "spec")
+KINDS = ("vcm", "trace", "coverage", "impact", "items", "spec", "reqif")
 
 
 @dataclass(frozen=True)
@@ -31,6 +32,8 @@ class ExportRequest:
 
 
 def available_formats(kind: str) -> tuple[str, ...]:
+    if kind == "reqif":
+        return ("reqif",)
     if kind == "items":
         return ("csv", "xlsx")
     if kind == "spec":
@@ -48,6 +51,8 @@ def build_output(
         raise ValueError(
             f"{request.kind} can be written as {', '.join(available_formats(request.kind))}, not {request.fmt}."
         )
+    if request.kind == "reqif":
+        return export_reqif(cfg, items, prov, request.documents)
     if request.kind == "items":
         return export_items_csv(cfg, items, prov) if request.fmt == "csv" else export_items_xlsx(cfg, items, prov)
     if request.kind == "spec":

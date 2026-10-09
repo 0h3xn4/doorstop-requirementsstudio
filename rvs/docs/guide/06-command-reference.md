@@ -14,15 +14,15 @@ Checks a project: file format, configuration, links, quality rules, change reque
 
 ## rvs export
 
-`rvs export PROJECT (--vcm | --trace SRC:DST[:up|down] | --coverage | --impact UID | --items | --spec) [--format csv|json|xlsx|html|docx|pdf] [-o|--output FILE] [--document PREFIX] [--method M] [--level L] [--status S] [--only-gaps] [--baseline NAME]`
+`rvs export PROJECT (--vcm | --trace SRC:DST[:up|down] | --coverage | --impact UID | --items | --spec | --reqif) [--format csv|json|xlsx|html|docx|pdf] [-o|--output FILE] [--document PREFIX] [--method M] [--level L] [--status S] [--only-gaps] [--baseline NAME]`
 
 See *Import and export*. Without `-o` text formats are written to standard output.
 
 ## rvs import
 
-`rvs import PROJECT FILE [--dry-run] [--skip-errors] [--reason TEXT] [--cr CR-ID] [--user NAME]`
+`rvs import PROJECT FILE [--dry-run] [--skip-errors] [--reason TEXT] [--cr CR-ID] [--user NAME] [--document PREFIX] [--map NAME=COLUMN]`
 
-Imports a CSV or XLSX table of items. `--dry-run` shows the plan and writes nothing. Exit code 1 means rows had errors.
+Imports a CSV or XLSX table of items, or a ReqIF file (`--document` and `--map` apply to ReqIF only; see *ReqIF exchange*). `--dry-run` shows the plan and writes nothing. Exit code 1 means rows had errors.
 
 ## rvs cr
 

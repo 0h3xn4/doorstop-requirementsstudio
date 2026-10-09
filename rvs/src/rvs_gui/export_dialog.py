@@ -25,6 +25,7 @@ KINDS = {
     "impact": "Impact of the selected item",
     "items": "Items table (re-importable)",
     "spec": "Specification document",
+    "reqif": "ReqIF exchange file (items, hierarchy, links)",
 }
 
 
@@ -84,7 +85,7 @@ class ExportDialog(QDialog):
         if current in available_formats(key):
             self.format.setCurrentText(current)
         shown = {
-            self.document: key in ("vcm", "spec"),
+            self.document: key in ("vcm", "spec", "reqif"),
             self.trace_source: key == "trace",
             self.trace_target: key == "trace",
             self.trace_direction: key == "trace",
@@ -102,7 +103,7 @@ class ExportDialog(QDialog):
         return ExportRequest(
             key,
             self.format.currentText(),
-            documents=docs if key in ("vcm", "spec") else (),
+            documents=docs if key in ("vcm", "spec", "reqif") else (),
             trace=trace if key == "trace" else ("", "", "down"),
             impact_uid=self.current_uid if key == "impact" else "",
         )

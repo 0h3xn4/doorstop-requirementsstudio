@@ -151,3 +151,47 @@ def test_exports_are_byte_identical_when_regenerated(spec):  # type: ignore[no-u
         _build(root, spec)
         for fmt in ("csv", "xlsx"):
             assert _export(root, fmt) == _export(root, fmt)
+
+
+# ReqIF ----------------------------------------------------------------------------------------------------------------------
+def _reqif_rows(root: Path, data: bytes):  # type: ignore[no-untyped-def]
+    from rvs_core.exporters.reqif import read_reqif
+
+    cfg, _ = load_project_config(root)
+    return read_reqif(data, cfg, DoorstopProject.open(root).items()).rows
+
+
+def _reqif_export(root: Path) -> bytes:
+    from rvs_core.exporters.reqif import export_reqif
+
+    cfg, _ = load_project_config(root)
+    return export_reqif(cfg, DoorstopProject.open(root).items(), PROV)
+
+
+@settings(**COMMON)
+@given(spec=projects())
+def test_reqif_reimport_changes_nothing(spec):  # type: ignore[no-untyped-def]
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d) / "p"
+        _build(root, spec)
+        before = _files(root)
+        plan = _plan(root, _reqif_rows(root, _reqif_export(root)))
+        assert not plan.errors, [e.message for e in plan.errors]
+        assert {r.action for r in plan.results} == {"unchanged"}
+        apply_import(root, plan, user="a", why="")
+        assert _files(root) == before
+
+
+@settings(**COMMON)
+@given(spec=projects())
+def test_reqif_into_an_empty_project_reproduces_the_items(spec):  # type: ignore[no-untyped-def]
+    with tempfile.TemporaryDirectory() as d:
+        a, b = Path(d) / "a", Path(d) / "b"
+        _build(a, spec)
+        exported = _reqif_export(a)
+        create_project(b, "P", DOCS)
+        plan = _plan(b, _reqif_rows(b, exported))
+        assert not plan.errors, [e.message for e in plan.errors]
+        apply_import(b, plan, user="a", why="")
+        assert _read(_export(b, "csv"), "csv") == _read(_export(a, "csv"), "csv")
+        assert _reqif_export(b) == exported  # and the ReqIF written from the copy is identical

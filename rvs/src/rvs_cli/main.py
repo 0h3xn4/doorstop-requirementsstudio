@@ -17,6 +17,7 @@ from rvs_core.exporters.itemsio import (
     read_csv,
     read_xlsx,
 )
+from rvs_core.exporters.reqif import read_reqif
 from rvs_core.findings import Severity
 from rvs_core.matrices import (
     Provenance,
@@ -45,9 +46,14 @@ def build_parser() -> argparse.ArgumentParser:
     what.add_argument("--impact", metavar="UID", help="items affected by a change to UID")
     what.add_argument("--items", action="store_true", help="all items as a table (csv or xlsx; re-importable)")
     what.add_argument("--spec", action="store_true", help="specification document (html, docx or pdf); see --document")
-    exp.add_argument("--format", choices=TABLE_FORMATS, default="csv")
+    what.add_argument(
+        "--reqif", action="store_true", help="ReqIF exchange file with items, hierarchy and links; see --document"
+    )
+    exp.add_argument("--format", choices=(*TABLE_FORMATS, "reqif"), default="csv")
     exp.add_argument("--output", "-o", type=Path, help="write to this file instead of standard output")
-    exp.add_argument("--document", action="append", default=[], help="VCM and --spec: only this document (repeatable)")
+    exp.add_argument(
+        "--document", action="append", default=[], help="VCM, --spec and --reqif: only this document (repeatable)"
+    )
     exp.add_argument("--method", action="append", default=[], help="VCM: only this verification method (repeatable)")
     exp.add_argument("--level", action="append", default=[], help="VCM: only this verification level (repeatable)")
     exp.add_argument("--status", action="append", default=[], help="VCM: only this verification status (repeatable)")
@@ -72,7 +78,8 @@ def build_parser() -> argparse.ArgumentParser:
     guide.add_argument("--output", "-o", type=Path, help="copy the guide to this file")
 
     imp = sub.add_parser(
-        "import", help="import items from a CSV or XLSX file written by 'export --items' (exit 0 ok, 1 errors)"
+        "import",
+        help="import items from a CSV or XLSX file written by 'export --items', or from a ReqIF file (exit 0 ok, 1 errors)",
     )
     imp.add_argument("project", type=Path)
     imp.add_argument("file", type=Path)
@@ -81,6 +88,14 @@ def build_parser() -> argparse.ArgumentParser:
     imp.add_argument("--reason", default="", help="why the items change (required for baselined items)")
     imp.add_argument("--cr", default=None, help="change request the imported edits belong to")
     imp.add_argument("--user", default=None, help="name recorded in the item history (default: login name)")
+    imp.add_argument("--document", default=None, help="ReqIF: import every specification into this document")
+    imp.add_argument(
+        "--map",
+        action="append",
+        default=[],
+        metavar="NAME=COLUMN",
+        help="ReqIF: import the attribute NAME into the item column COLUMN (repeatable)",
+    )
     return parser
 
 
@@ -97,7 +112,9 @@ def _validate(args: argparse.Namespace) -> int:
 
 
 def _request(args: argparse.Namespace) -> ExportRequest:
-    if args.items:
+    if args.reqif:
+        kind = "reqif"
+    elif args.items:
         kind = "items"
     elif args.spec:
         kind = "spec"
@@ -116,7 +133,7 @@ def _request(args: argparse.Namespace) -> ExportRequest:
             raise ValueError("--trace needs SRC:DST or SRC:DST:up|down, for example SYS:EPS")
         trace = (parts[0], parts[1], parts[2] if len(parts) == 3 else "down")
     return ExportRequest(
-        kind, args.format, tuple(args.document), tuple(args.method), tuple(args.level), tuple(args.status),
+        kind, "reqif" if kind == "reqif" else args.format, tuple(args.document), tuple(args.method), tuple(args.level), tuple(args.status),
         args.only_gaps, trace, args.impact or "",
     )  # fmt: skip
 
@@ -160,8 +177,8 @@ def _import(args: argparse.Namespace) -> int:
         print(f"rvs import: the file {path} does not exist.", file=sys.stderr)
         return 2
     suffix = path.suffix.lower()
-    if suffix not in (".csv", ".xlsx"):
-        print("rvs import: the file must be .csv or .xlsx (written by 'rvs export --items').", file=sys.stderr)
+    if suffix not in (".csv", ".xlsx", ".reqif"):
+        print("rvs import: the file must be .csv, .xlsx (written by 'rvs export --items') or .reqif.", file=sys.stderr)
         return 2
     report = validate_project(args.project, doorstop=False)
     if report.exit_code == 3 or report.config is None:
@@ -170,7 +187,16 @@ def _import(args: argparse.Namespace) -> int:
         return 3
     try:
         data = path.read_bytes()
-        rows = read_csv(data) if suffix == ".csv" else read_xlsx(data)
+        if suffix == ".reqif":
+            mapping = dict(m.split("=", 1) for m in args.map if "=" in m)
+            read = read_reqif(data, report.config, report.items, document=args.document, mapping=mapping)
+            rows = read.rows
+            for note in read.notes:
+                print(f"note: {note}")
+            if read.unmapped:
+                print(f"note: not imported (no matching column; use --map NAME=COLUMN): {', '.join(read.unmapped)}")
+        else:
+            rows = read_csv(data) if suffix == ".csv" else read_xlsx(data)
     except Exception as exc:  # noqa: BLE001 - corrupt or non-spreadsheet file: say so plainly
         print(f"rvs import: {path.name} could not be read ({exc}).", file=sys.stderr)
         return 2

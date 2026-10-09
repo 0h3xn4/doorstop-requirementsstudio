@@ -7,6 +7,7 @@ from rvs_core.config import ProjectConfig
 from rvs_core.exporters import DOC_FORMATS, TABLE_FORMATS, render_doc, render_table
 from rvs_core.exporters.builders import spec_doc
 from rvs_core.exporters.itemsio import export_items_csv, export_items_xlsx
+from rvs_core.exporters.reqif import export_reqif
 from rvs_core.matrices import Provenance, VcmFilter, build_traceability, build_vcm, coverage_table, impact_table
 from rvs_core.trace import LinkGraph, coverage, impact
 
@@ -32,6 +33,7 @@ def all_outputs(
             out[f"{name}.{fmt}"] = render_table(table, fmt)
     out["items.csv"] = export_items_csv(cfg, items, prov)
     out["items.xlsx"] = export_items_xlsx(cfg, items, prov)
+    out["project.reqif"] = export_reqif(cfg, items, prov)
     spec = spec_doc(cfg, items, graph, None, prov)
     for fmt in DOC_FORMATS:
         out[f"spec.{fmt}"] = render_doc(spec, fmt)

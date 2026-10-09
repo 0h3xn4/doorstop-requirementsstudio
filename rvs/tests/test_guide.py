@@ -92,6 +92,8 @@ def test_every_config_file_rule_and_finding_code_is_documented(sources: str):
     assert not code_missing, code_missing
     codes = set()
     for path in (ROOT / "src").rglob("*.py"):
+        if path.name == "reqif.py":  # its RVS-xx-... strings are ReqIF identifiers, not finding codes
+            continue
         codes |= set(re.findall(r'"(RVS-[A-Z0-9]+-[A-Z0-9-]*[A-Z0-9])"', path.read_text(encoding="utf-8")))
     undocumented = sorted(c for c in codes if c not in sources)
     assert not undocumented, f"finding codes missing from docs/guide/07-reference.md: {undocumented}"

@@ -18,6 +18,7 @@ Spec: `docs/SPEC.md`. Design: `docs/ARCHITECTURE.md`. Plan: `docs/PLAN.md`. Deci
 - Offline wheelhouse: `sh scripts/build_wheelhouse.sh`
 - Linux system libs for Qt: libegl1 libgl1 libxkbcommon0 libfontconfig1 libdbus-1-3
 
+- ReqIF: `rvs export <project> --reqif [--document P] -o f.reqif`; `rvs import <project> f.reqif [--document P] [--map NAME=COLUMN] --dry-run` (rows go through the same `plan_import`)
 - Guide: edit `docs/guide/*.md`, then `python scripts/build_guide.py` (tests fail if `rvs_core/guide/guide.html` is stale or an option/code is undocumented)
 - Release: `sh scripts/build_release.sh` (optional `RVS_SIGN_CMD`); per-user install `packaging/install-linux.sh`
 - Modes: guided (wizard, help) and expert (dense, in-place edit); user settings in `rvs_core/userconfig.py`, never project data

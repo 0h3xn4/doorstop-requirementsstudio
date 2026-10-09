@@ -34,4 +34,4 @@ Rule for every milestone: tests first; mypy + ruff clean; offline test and `door
 - **Accept:** full pytest-qt suite, performance targets met, release checklist.
 
 ## Post-v1
-ReqIF import/export; ECSS compliance review once standards text is supplied; dark theme.
+ECSS compliance review once standards text is supplied; dark theme.

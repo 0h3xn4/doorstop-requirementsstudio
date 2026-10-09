@@ -55,12 +55,13 @@ def test_satellite300_outputs_match_golden_hashes(satellite_outputs: dict[str, b
 
 def test_every_output_type_is_covered(minimal_outputs: dict[str, bytes]):
     kinds = {n.rsplit(".", 1)[1] for n in minimal_outputs}
-    assert kinds == {"csv", "json", "xlsx", "html", "docx", "pdf"}
+    assert kinds == {"csv", "json", "xlsx", "html", "docx", "pdf", "reqif"}
     assert {n.split(".")[0].split("-")[0] for n in minimal_outputs} == {
         "vcm",
         "trace",
         "coverage",
         "impact",
         "items",
+        "project",
         "spec",
     }

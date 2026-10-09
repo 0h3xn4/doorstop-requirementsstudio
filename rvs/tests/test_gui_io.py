@@ -182,7 +182,7 @@ def test_import_wrong_file_type_or_corrupt_file_is_a_message(win: MainWindow, tm
     assert (
         win.read_import_file(odd) is None
         and win.notification.kind == "error"
-        and ".csv or .xlsx" in win.notification.text()
+        and ".csv, .xlsx or .reqif" in win.notification.text()
     )
     broken = tmp_path / "broken.xlsx"
     broken.write_bytes(b"not a zip")

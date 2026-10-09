@@ -43,6 +43,7 @@ from rvs_core.adapter import ItemData, ProjectError
 from rvs_core.authoring import ReasonRequiredError
 from rvs_core.exporters.export_request import ExportRequest, build_output
 from rvs_core.exporters.itemsio import ImportReport, apply_import, read_csv, read_xlsx
+from rvs_core.exporters.reqif import read_reqif
 from rvs_core.matrices import Provenance
 from rvs_core.validate import ValidationReport
 from rvs_gui.baseline_dialog import NewBaselineDialog  # noqa: F401
@@ -543,7 +544,9 @@ class MainWindow(QMainWindow):
         if self.session.cfg is None:
             self.notification.show_message("info", "Open a project first.")
             return
-        chosen, _ = QFileDialog.getOpenFileName(self, "Import items", "", "Item tables (*.csv *.xlsx)")
+        chosen, _ = QFileDialog.getOpenFileName(
+            self, "Import items", "", "Item tables and ReqIF files (*.csv *.xlsx *.reqif)"
+        )
         if not chosen:
             return
         rows = self.read_import_file(Path(chosen))
@@ -555,17 +558,52 @@ class MainWindow(QMainWindow):
 
     def read_import_file(self, path: Path) -> list[dict[str, str]] | None:
         suffix = path.suffix.lower()
-        if suffix not in (".csv", ".xlsx"):
-            self.notification.show_message("error", f"{path.name} cannot be imported: the file must be .csv or .xlsx.")
+        if suffix not in (".csv", ".xlsx", ".reqif"):
+            self.notification.show_message(
+                "error", f"{path.name} cannot be imported: the file must be .csv, .xlsx or .reqif."
+            )
             return None
         try:
             data = path.read_bytes()
+            if suffix == ".reqif":
+                return self._read_reqif(data)
             return read_csv(data) if suffix == ".csv" else read_xlsx(data)
         except Exception as exc:  # noqa: BLE001 - corrupt or unreadable file: plain message, no traceback
             self.notification.show_message(
-                "error", f"{path.name} could not be read ({exc}). Check that it is an item table exported by RVS."
+                "error",
+                f"{path.name} could not be read ({exc}). "
+                + (
+                    "Check that it is a ReqIF file."
+                    if suffix == ".reqif"
+                    else "Check that it is an item table exported by RVS."
+                ),
             )
             return None
+
+    def _read_reqif(self, data: bytes, document: str | None = None) -> list[dict[str, str]] | None:
+        """Rows of a ReqIF file; asks which document to use when its specifications do not name one."""
+        s = self.session
+        assert s.cfg is not None
+        try:
+            read = read_reqif(data, s.cfg, s.items, document=document)
+        except ValueError as exc:
+            if document is None and "does not match a document" in str(exc):
+                choice, ok = QInputDialog.getItem(
+                    self,
+                    "Import ReqIF",
+                    f"{exc}\n\nImport into which document?",
+                    [d.prefix for d in s.cfg.project.documents],
+                    0,
+                    False,
+                )
+                return self._read_reqif(data, choice) if ok else None
+            raise
+        notes = list(read.notes)
+        if read.unmapped:
+            notes.append(f"Not imported (no matching field): {', '.join(read.unmapped)}.")
+        if notes:
+            self.notification.show_message("info", " ".join(notes))
+        return read.rows
 
     def apply_import(self, plan: object, why: str = "", skip_errors: bool = False) -> ImportReport | None:
         from rvs_core.exporters.itemsio import ImportPlan

@@ -1,6 +1,6 @@
 """Output formats. Tables (matrices): csv, json, xlsx, html, docx, pdf. Documents (specifications): html, docx, pdf.
 
-ReqIF is deferred (decision D04); a new format is added by extending these two dispatch functions."""
+ReqIF (project exchange, not a matrix or document format) lives in ``reqif.py`` and is reached through ExportRequest."""
 
 from rvs_core.exporters.builders import matrix_doc
 from rvs_core.exporters.docx_out import render_docx

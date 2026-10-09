@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QSplitter,
     QTableView,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -28,6 +29,9 @@ import rvs_core
 from rvs_gui.dialogs import NewItemDialog
 from rvs_gui.doctree import DocumentTree
 from rvs_gui.editor import RequirementEditor
+from rvs_gui.graph_view import GraphView
+from rvs_gui.impact_panel import ImpactPanel
+from rvs_gui.matrix_views import CoverageView, TraceabilityView, VcmView
 from rvs_gui.models import COLUMNS, ItemFilterProxy, ItemTableModel
 from rvs_gui.problems import ProblemsPanel
 from rvs_gui.session import ProjectSession
@@ -86,6 +90,12 @@ class MainWindow(QMainWindow):
         self.editor = RequirementEditor(self.session)
         self.doc_tree = DocumentTree()
         self.problems_panel = ProblemsPanel()
+        self.impact_panel = ImpactPanel(self.session)
+        self.trace_view = TraceabilityView(self.session)
+        self.vcm_view = VcmView(self.session)
+        self.coverage_view = CoverageView(self.session)
+        self.graph_view = GraphView(self.session)
+        self.graph_view.on_node_clicked = self.select_item
         self._syncing = False
 
         left = QWidget()
@@ -98,10 +108,16 @@ class MainWindow(QMainWindow):
         split.addWidget(self.editor)
         split.setStretchFactor(0, 3)
         split.setStretchFactor(1, 2)
+        self.tabs = QTabWidget()
+        self.tabs.addTab(split, "Items")
+        self.tabs.addTab(self.trace_view, "Traceability")
+        self.tabs.addTab(self.vcm_view, "VCM")
+        self.tabs.addTab(self.coverage_view, "Coverage")
+        self.tabs.addTab(self.graph_view, "Graph")
         central = QWidget()
         lay = QVBoxLayout(central)
         lay.addWidget(self.notification)
-        lay.addWidget(split, 1)
+        lay.addWidget(self.tabs, 1)
         self.setCentralWidget(central)
 
         tree_dock = QDockWidget("Documents", self)
@@ -109,6 +125,7 @@ class MainWindow(QMainWindow):
         tree_dock.setWidget(self.doc_tree)
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, tree_dock)
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.problems_panel)
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.impact_panel)
         self._build_menus(tree_dock)
         self._connect()
         self.statusBar().showMessage("")
@@ -134,11 +151,22 @@ class MainWindow(QMainWindow):
         self.action_save.triggered.connect(lambda: self.editor.save())
         self.action_revert = QAction("Revert", self)
         self.action_revert.triggered.connect(self.editor.revert)
-        item_menu.addActions([self.action_new, self.action_save, self.action_revert])
+        self.action_new_ver = QAction("New Verification Item…", self)
+        self.action_new_ver.triggered.connect(self.new_verification_dialog)
+        item_menu.addActions([self.action_new, self.action_new_ver, self.action_save, self.action_revert])
+
+        project_menu = bar.addMenu("Project")
+        self.action_refresh = QAction("Refresh", self)
+        self.action_refresh.setShortcut(QKeySequence.StandardKey.Refresh)
+        self.action_refresh.triggered.connect(self.session.refresh)
+        self.action_full = QAction("Run Full Doorstop Validation", self)
+        self.action_full.triggered.connect(self.run_full_validation)
+        project_menu.addActions([self.action_refresh, self.action_full])
 
         view_menu = bar.addMenu("View")
         view_menu.addAction(tree_dock.toggleViewAction())
         view_menu.addAction(self.problems_panel.toggleViewAction())
+        view_menu.addAction(self.impact_panel.toggleViewAction())
         self.columns_menu = view_menu.addMenu("Columns")
         self.column_actions: dict[str, QAction] = {}
         for col in COLUMNS:
@@ -157,6 +185,10 @@ class MainWindow(QMainWindow):
         self.session.loaded.connect(self._on_loaded)
         self.session.item_changed.connect(self._on_item_changed)
         self.editor.message.connect(self.notification.show_message)
+        for view in (self.trace_view, self.vcm_view, self.coverage_view):
+            view.message.connect(self.notification.show_message)
+        self.editor.item_loaded.connect(self._on_editor_loaded)
+        self.impact_panel.item_requested.connect(self.select_item)
         self.editor.dirty_changed.connect(lambda _d: self.statusBar().showMessage(self._status_text()))
         self.doc_tree.document_selected.connect(self.table_proxy.set_document)
         self.doc_tree.item_selected.connect(self.select_item)
@@ -247,6 +279,19 @@ class MainWindow(QMainWindow):
         elif uid:
             self.editor.current_uid = None
 
+    def _on_editor_loaded(self, uid: str) -> None:
+        self.impact_panel.set_item(uid)
+        self.graph_view.show_item(uid)
+
+    def run_full_validation(self) -> None:
+        if self.session.cfg is None:
+            self.notification.show_message("info", "Open a project first.")
+            return
+        self.session.run_full_validation()
+        self.notification.show_message(
+            "info", "Full Doorstop validation finished; its findings are in the Problems panel until the next edit."
+        )
+
     def _on_item_changed(self, uid: str) -> None:
         self.statusBar().showMessage(self._status_text())
 
@@ -307,6 +352,41 @@ class MainWindow(QMainWindow):
         if dlg.exec():
             prefix, title, parents = dlg.values()
             self.create_item(prefix, title, parents)
+
+    def new_verification_dialog(self) -> None:
+        if self.session.cfg is None:
+            self.notification.show_message("info", "Open a project first.")
+            return
+        dlg = NewItemDialog(self.session, self, kind="verification")
+        if dlg.exec():
+            prefix, _title, targets = dlg.values()
+            self.create_verification(prefix, targets)
+
+    def create_verification(self, prefix: str, targets: Sequence[str]) -> str | None:
+        """New verification item (planned) that verifies ``targets``; method and level follow the first target."""
+        if self.editor.is_dirty():
+            self.notification.show_message("warning", "Save or revert your changes before creating a new item.")
+            return None
+        assert self.session.cfg is not None
+        first = self.session.item(targets[0]) if targets else None
+        vocab = self.session.cfg.vocab
+        attrs = {
+            "title": f"Verify {', '.join(targets)}" if targets else "Verification",
+            "verify_method": (first.attrs.get("verify_method") if first else None) or vocab.values("verify_method")[0],
+            "verify_level": (first.attrs.get("verify_level") if first else None) or vocab.values("verify_level")[0],
+            "link_verifies": list(targets),
+        }
+        text = f"Verify {', '.join(targets)}." if targets else "Describe the verification activity."
+        try:
+            item = self.session.create_item(prefix, text, attrs=attrs, derived=True)
+        except Exception as exc:  # noqa: BLE001 - friendly message, never a traceback
+            self.notification.show_message("error", str(exc))
+            return None
+        self.select_item(item.uid)
+        self.notification.show_message(
+            "success", f"Created {item.uid} (planned). Describe the procedure and set its status."
+        )
+        return item.uid
 
     def create_item(self, prefix: str, title: str, parents: Sequence[str] = ()) -> str | None:
         if self.editor.is_dirty():

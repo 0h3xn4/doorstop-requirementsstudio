@@ -72,6 +72,12 @@ project/
 - `rvs_gui`: `ProjectSession` -> models (`ItemTableModel`/`ItemFilterProxy`/`FindingsModel`) -> widgets (`DocumentTree`, `RequirementEditor`, `ProblemsPanel`, `InlineNotification`) -> `MainWindow`. The editor form is generated from `config/templates.yaml`, so project-specific free attributes appear without code changes.
 - Strict offline guard (`adapter/_offline_guard.py`, DEVIATIONS V01).
 
+## 5c. As built in M3
+- `rvs_core.trace`: `LinkGraph` (parent + typed links, config/links.yaml), link validation, `impact`, `neighbourhood`, `coverage`, `aggregate_status`. `rvs_core.matrices`: `MatrixTable` + `Provenance` (+ CSV/JSON rendering) for traceability, VCM, coverage and impact; everything the GUI tabs and `rvs export` show comes from these.
+- `rvs_core.adapter.cache`: per-document item cache (D43). `ItemData` now carries `stamp` and `link_stamps`, so suspect links are computed from snapshots.
+- GUI: tabs Items / Traceability / VCM / Coverage / Graph, Impact dock, "Clear suspect links", New Verification Item. `ProjectSession` reuses the validation report's items, docs and graph (no second load).
+- Measured at 5,000 items: warm open + rules + links 0.4 s; graph + VCM + trace + coverage 0.04 s; cold open 6.0 s (V14).
+
 ## 6. Risks
 1. Doorstop's transitive network libs vs. offline test (DEVIATIONS V01).
 2. Doorstop load time at 5,000 items — benchmark in M1 spike; fallback is the one-pass cached index.

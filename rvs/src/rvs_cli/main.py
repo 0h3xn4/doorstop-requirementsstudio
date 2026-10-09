@@ -1,7 +1,6 @@
 """``rvs`` entry point."""
 
 import argparse
-import csv
 import json
 import sys
 from collections.abc import Sequence
@@ -18,6 +17,7 @@ from rvs_core.matrices import (
     coverage_table,
     impact_table,
 )
+from rvs_core.matrices.render import render
 from rvs_core.trace import coverage, impact
 from rvs_core.validate import ValidationReport, validate_project
 
@@ -62,35 +62,6 @@ def _validate(args: argparse.Namespace) -> int:
     return report.exit_code
 
 
-def _render(table: MatrixTable, fmt: str) -> str:
-    if fmt == "json":
-        return (
-            json.dumps(
-                {
-                    "title": table.title,
-                    "columns": table.columns,
-                    "rows": table.rows,
-                    "flags": table.flags,
-                    "notes": list(table.notes),
-                    "provenance": table.provenance.to_dict(),
-                },
-                indent=2,
-                ensure_ascii=False,
-            )
-            + "\n"
-        )
-    import io
-
-    buf = io.StringIO()
-    buf.write(f"# {table.title}\n")
-    for line in (*table.provenance.lines(), *table.notes):
-        buf.write(f"# {line}\n")
-    writer = csv.writer(buf, lineterminator="\n")
-    writer.writerow(table.columns)
-    writer.writerows(table.rows)
-    return buf.getvalue()
-
-
 def _build_table(args: argparse.Namespace, report: ValidationReport) -> MatrixTable:
     cfg, items, graph = report.config, report.items, report.graph
     assert cfg is not None and graph is not None
@@ -119,7 +90,7 @@ def _export(args: argparse.Namespace) -> int:
             print(f.format(), file=sys.stderr)
         return 3
     try:
-        text = _render(_build_table(args, report), args.format)
+        text = render(_build_table(args, report), args.format)
     except ValueError as exc:
         print(f"rvs export: {exc}", file=sys.stderr)
         return 2

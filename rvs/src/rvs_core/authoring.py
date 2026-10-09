@@ -88,11 +88,14 @@ class EditService:
         *,
         attrs: Mapping[str, Any] | None = None,
         parents: Sequence[str] = (),
+        derived: bool = False,
         why: str = "",
     ) -> ItemData:
         proj = DoorstopProject.open(self.root)
         self._check_parents(proj, prefix, parents)
-        item = proj.add_item(prefix, text, attrs=attrs)
+        decl = self._cfg.project.document(prefix)
+        defaults = dict(self._cfg.templates.kinds[decl.kind].defaults) if decl else {}
+        item = proj.add_item(prefix, text, attrs={**defaults, **(attrs or {})}, derived=derived)
         for parent in parents:
             proj.link(item.uid, parent)
         self._record(item.uid, "create", ["text", *(attrs or {}), *(["links"] if parents else [])], why)
@@ -113,6 +116,17 @@ class EditService:
             uid, text=text if "text" in changed else None, attrs={k: (attrs or {})[k] for k in changed if k != "text"}
         )
         self._record(uid, "update", changed, why)
+        return proj.get_item(uid)
+
+    def clear_suspect(self, uid: str, *, why: str = "") -> ItemData:
+        """Accept the current state of the item's parents: its links stop being suspect."""
+        proj = DoorstopProject.open(self.root)
+        before = proj.get_item(uid)
+        self._require_reason(before, why)
+        if not proj.suspect_links(uid):
+            return before
+        proj.clear_suspect(uid)
+        self._record(uid, "clear-suspect", ["links"], why)
         return proj.get_item(uid)
 
     def set_parents(self, uid: str, parents: Sequence[str], *, why: str = "") -> ItemData:

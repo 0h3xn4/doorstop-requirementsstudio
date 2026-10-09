@@ -8,23 +8,35 @@ from rvs_gui.session import ProjectSession
 class NewItemDialog(QDialog):
     """Ask for document, title and parents of a new requirement."""
 
-    def __init__(self, session: ProjectSession, parent: QWidget | None = None, document: str | None = None) -> None:
+    def __init__(
+        self,
+        session: ProjectSession,
+        parent: QWidget | None = None,
+        document: str | None = None,
+        kind: str = "requirements",
+    ) -> None:
         super().__init__(parent)
-        self.setWindowTitle("New requirement")
+        self.kind = kind
+        self.setWindowTitle("New requirement" if kind == "requirements" else "New verification item")
         assert session.cfg is not None
         self._parent_of = {d.prefix: d.parent for d in session.cfg.project.documents}
         self.document = QComboBox()
-        self.document.addItems(session.requirement_documents())
-        if document and document in session.requirement_documents():
+        self.document.addItems(session.documents_of_kind(kind))
+        if document and document in session.documents_of_kind(kind):
             self.document.setCurrentText(document)
         self.title = QLineEdit()
         self.title.setPlaceholderText("Short title")
         self.parents = QLineEdit()
-        self.parents.setPlaceholderText("Parent item IDs, comma separated")
+        verification = kind == "verification"
+        self.parents.setPlaceholderText(
+            "IDs of the requirements it verifies, comma separated"
+            if verification
+            else "Parent item IDs, comma separated"
+        )
         form = QFormLayout()
         form.addRow("Document", self.document)
         form.addRow("Title", self.title)
-        form.addRow("Parents", self.parents)
+        form.addRow("Verifies" if verification else "Parents", self.parents)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
@@ -35,7 +47,7 @@ class NewItemDialog(QDialog):
         self._on_document(self.document.currentText())
 
     def _on_document(self, prefix: str) -> None:
-        root = self._parent_of.get(prefix) is None
+        root = self.kind == "requirements" and self._parent_of.get(prefix) is None
         self.parents.setEnabled(not root)
         if root:
             self.parents.clear()

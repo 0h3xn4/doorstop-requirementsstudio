@@ -86,3 +86,28 @@ def test_history_files_do_not_break_validation(minimal_project: Path):
 
     EditService(minimal_project, user="a").update_item("SYS-0001", attrs={"owner": "z"}, why="x")
     assert validate_project(minimal_project).exit_code == 0
+
+
+def test_create_verification_item_with_typed_link(minimal_project: Path):
+    svc = EditService(minimal_project, user="bob")
+    item = svc.create_item(
+        "VER",
+        "Verify EPS-0002.",
+        attrs={"title": "V", "verify_method": "test", "verify_level": "subsystem", "link_verifies": ["EPS-0002"]},
+        derived=True,
+        why="plan",
+    )
+    assert item.uid == "VER-0004" and item.derived and item.attrs["v_status"] == "planned"
+    assert item.attrs["link_verifies"] == ["EPS-0002"]
+
+
+def test_clear_suspect_links_is_recorded(minimal_project: Path):
+    from rvs_core.adapter import DoorstopProject
+
+    svc = EditService(minimal_project, user="bob")
+    svc.update_item("SYS-0002", attrs={"title": "Eclipse operation changed"}, why="x")
+    assert DoorstopProject.open(minimal_project).suspect_links("EPS-0001") == ("SYS-0002",)
+    svc.clear_suspect("EPS-0001", why="reviewed the change")
+    assert DoorstopProject.open(minimal_project).suspect_links("EPS-0001") == ()
+    entry = read_history(minimal_project, "EPS-0001")[-1]
+    assert entry["action"] == "clear-suspect" and entry["why"] == "reviewed the change" and entry["fields"] == ["links"]

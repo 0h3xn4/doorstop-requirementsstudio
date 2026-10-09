@@ -17,7 +17,7 @@ Rule for every milestone: tests first; mypy + ruff clean; offline test and `door
 - Tree + table views, editor (form + Markdown + preview), quality rules and Problems panel with jump links, glossary/acronym highlighting, edit with who/why recorded, satellite300 project generator.
 - **Accept:** every rule has positive/negative unit tests; pytest-qt create/edit/save flow.
 
-## M3 Links and matrices
+## M3 Links and matrices  *(done, one target open — see docs/demo/M3.md)*
 - Typed links + validation, traceability matrix (both directions, gaps), VCM (placeholder layout), impact analysis, coverage dashboard, graph view, stress5000 project.
 - **Accept:** golden files for matrices; open 5k < 3 s, matrices < 5 s.
 

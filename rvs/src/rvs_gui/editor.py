@@ -27,7 +27,7 @@ from rvs_gui.session import ProjectSession
 from rvs_gui.widgets import AcronymHighlighter
 
 # Attributes edited elsewhere or managed by RVS.
-_HIDDEN = {"rvs_schema_version", "link_satisfies", "link_refines", "link_conflicts", "link_refs"}
+_HIDDEN = {"rvs_schema_version"}
 _LIST_TYPES = {"uid-list", "string-list"}
 
 
@@ -44,6 +44,7 @@ def _parse_list(text: str) -> list[str]:
 class RequirementEditor(QWidget):
     message = Signal(str, str)  # (kind, text) -> shown by the main window's notification
     dirty_changed = Signal(bool)
+    item_loaded = Signal(str)
 
     def __init__(self, session: ProjectSession) -> None:
         super().__init__()
@@ -71,6 +72,9 @@ class RequirementEditor(QWidget):
         self.why.setPlaceholderText("Reason for change (required once an item is baselined)")
         self.save_button = QPushButton("Save")
         self.revert_button = QPushButton("Revert")
+        self.clear_suspect_button = QPushButton("Clear suspect links")
+        self.clear_suspect_button.setToolTip("Accept the current state of the parent items this item links to")
+        self.clear_suspect_button.setEnabled(False)
         self.item_findings = QListWidget()
         self.item_findings.setMaximumHeight(110)
         self.item_findings.setWordWrap(True)
@@ -93,6 +97,7 @@ class RequirementEditor(QWidget):
         vertical.setStretchFactor(1, 2)
         buttons = QHBoxLayout()
         buttons.addWidget(self.why, 1)
+        buttons.addWidget(self.clear_suspect_button)
         buttons.addWidget(self.revert_button)
         buttons.addWidget(self.save_button)
         root = QVBoxLayout(self)
@@ -106,6 +111,7 @@ class RequirementEditor(QWidget):
         self.why.textChanged.connect(self._update_buttons)
         self.save_button.clicked.connect(self.save)
         self.revert_button.clicked.connect(self.revert)
+        self.clear_suspect_button.clicked.connect(self.clear_suspect)
         self.setEnabled(False)
 
     # form construction ########################################################
@@ -200,10 +206,12 @@ class RequirementEditor(QWidget):
             self.statement.setPlainText(item.text.strip())
             self.why.clear()
             self._refresh_findings()
+            self.clear_suspect_button.setEnabled(bool(self.session.suspect_parents(uid)))
             self.setEnabled(True)
         finally:
             self._loading = False
         self._on_edited()
+        self.item_loaded.emit(uid)
 
     def _refresh_findings(self) -> None:
         self.item_findings.clear()
@@ -248,6 +256,18 @@ class RequirementEditor(QWidget):
             self.dirty_changed.emit(dirty)
 
     # actions ##################################################################
+    def clear_suspect(self) -> None:
+        uid = self.current_uid
+        if uid is None:
+            return
+        try:
+            self.session.clear_suspect(uid, why=self.why.text())
+        except (ReasonRequiredError, ValueError, ProjectError) as exc:
+            self.message.emit("error", str(exc))
+            return
+        self.load(uid)
+        self.message.emit("success", f"Cleared the suspect links of {uid}.")
+
     def revert(self) -> None:
         if self.current_uid:
             self.load(self.current_uid)

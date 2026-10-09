@@ -29,7 +29,7 @@ Rule for every milestone: tests first; mypy + ruff clean; offline test and `door
 - Baselines (tag + manifest), change requests, open-CR gate with deferral, baseline diff and working-copy diff with visual before/after.
 - **Accept:** baseline immutability tests; diff lists added/removed/changed.
 
-## M6 Polish
+## M6 Polish (done)
 - Guided wizard and expert mode, keyboard shortcuts, user guide (offline HTML/PDF) with both walkthroughs, developer docs (file format, rules config), installer hardening (no admin, uninstall, optional signing step), performance pass, licence report + SBOM per release.
 - **Accept:** full pytest-qt suite, performance targets met, release checklist.
 

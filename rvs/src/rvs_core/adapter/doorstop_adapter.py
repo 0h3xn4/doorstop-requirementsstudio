@@ -52,6 +52,12 @@ def _plain(value: Any) -> Any:
     return value
 
 
+def _item_objects(doc: Any) -> list[Any]:
+    """The document's Item objects *without* parsing their files (``Document.items`` parses every item to test
+    ``active``, which made one edit in a 1,300-item document cost a second). Files are parsed on first attribute use."""
+    return list(doc._iter())  # noqa: SLF001 - Doorstop offers no public lazy listing (docs/DEVIATIONS.md V21)
+
+
 class DoorstopProject:
     """A project folder, i.e. a Doorstop tree. Not thread-safe; create one per worker."""
 
@@ -133,12 +139,14 @@ class DoorstopProject:
                 doc = self._doc(prefix)
             except ProjectError:
                 raise ProjectError(f"Item '{uid}' does not exist. Check the ID or refresh the project.") from None
-            for item in doc.items:  # one pass per document; later lookups are dictionary hits
+            for item in _item_objects(doc):  # one pass per document; later lookups are dictionary hits
                 self._index[str(item.uid)] = item
         try:
-            return self._index[uid]
+            item = self._index[uid]
         except KeyError:
             raise ProjectError(f"Item '{uid}' does not exist. Check the ID or refresh the project.") from None
+        item.load()  # Doorstop's plain setters save without loading first: an unloaded item would overwrite its file
+        return item
 
     def _data(self, item: Any) -> ItemData:
         attrs = {k: _plain(item.get(k)) for k in sorted(item.extended)}
@@ -194,11 +202,11 @@ class DoorstopProject:
             else:
                 missing.append((path, rel, key))
         if missing:
-            objects = {os.path.normpath(str(i.path)): i for i in doc.items}
+            objects = {os.path.normpath(str(i.path)): i for i in _item_objects(doc)}
             for path, rel, key in missing:
                 obj = objects.get(os.path.normpath(str(path)))
-                if obj is None:
-                    continue  # not an item file
+                if obj is None or not obj.active:
+                    continue  # not an item file, or an inactive item (Document.items skips those too)
                 data = self._data(obj)
                 self.cache_stats.misses += 1
                 result[rel] = data

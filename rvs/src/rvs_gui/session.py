@@ -38,9 +38,17 @@ class ProjectSession(QObject):
         self._findings_by_uid: dict[str, list[Finding]] = {}
 
     # loading ##################################################################
+    @staticmethod
+    def open_report(root: Path) -> ValidationReport:
+        """The slow part of opening (read and check every item). Touches no session state: safe on a worker thread."""
+        return validate_project(root, doorstop=False)  # fast path: Doorstop's own validation is on request
+
     def open(self, root: Path) -> ValidationReport:
         """Validate and load ``root``. On a fatal problem nothing is loaded and the report explains why."""
-        report = validate_project(root, doorstop=False)  # fast path: Doorstop's own validation is on request
+        return self.adopt(root, self.open_report(root))
+
+    def adopt(self, root: Path, report: ValidationReport) -> ValidationReport:
+        """Make a report from :meth:`open_report` the open project (GUI thread)."""
         self.report = report
         if report.exit_code == 3 or report.config is None:
             return report

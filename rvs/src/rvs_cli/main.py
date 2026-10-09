@@ -36,7 +36,7 @@ def build_parser() -> argparse.ArgumentParser:
     val.add_argument("--strict", action="store_true", help="treat warnings as errors")
     val.add_argument("--fast", action="store_true", help="skip Doorstop's own tree validation (RVS checks still run)")
 
-    exp = sub.add_parser("export", help="write a matrix or report (CSV or JSON; DOCX/PDF/HTML/XLSX arrive in M4)")
+    exp = sub.add_parser("export", help="write a matrix or report (CSV, JSON, XLSX, HTML, DOCX or PDF)")
     exp.add_argument("project", type=Path)
     what = exp.add_mutually_exclusive_group(required=True)
     what.add_argument("--vcm", action="store_true", help="verification control matrix")
@@ -55,6 +55,21 @@ def build_parser() -> argparse.ArgumentParser:
     exp.add_argument("--only-gaps", action="store_true", help="VCM: only requirements that nothing verifies")
 
     changecontrol.add_parsers(sub)
+
+    init = sub.add_parser("init", help="create a new project from a template")
+    init.add_argument("project", type=Path, nargs="?")
+    init.add_argument("--name", help="project name")
+    init.add_argument("--template", default="minimal")
+    init.add_argument("--git", action="store_true", help="also create a Git repository in the folder")
+    init.add_argument("--list-templates", action="store_true")
+
+    selftest = sub.add_parser("selftest", help="check the installation: bundled files, exports, Git, offline guard")
+    selftest.add_argument(
+        "--manifest", type=Path, help="also verify the files of this folder against its MANIFEST.sha256"
+    )
+
+    guide = sub.add_parser("guide", help="write the offline user guide (HTML) or print where it is")
+    guide.add_argument("--output", "-o", type=Path, help="copy the guide to this file")
 
     imp = sub.add_parser(
         "import", help="import items from a CSV or XLSX file written by 'export --items' (exit 0 ok, 1 errors)"
@@ -190,6 +205,57 @@ def _import(args: argparse.Namespace) -> int:
     return 1 if result.errors else 0
 
 
+def _init(args: argparse.Namespace) -> int:
+    from rvs_core.project_templates import TEMPLATES, create_from_template
+
+    if args.list_templates:
+        for t in TEMPLATES.values():
+            print(f"{t.key:<10} {t.title}: {t.description}")
+        return 0
+    if args.project is None or not args.name:
+        print('rvs init: give a folder and --name, for example: rvs init my-sat --name "My satellite"', file=sys.stderr)
+        return 2
+    try:
+        create_from_template(args.project, args.name, args.template, git=args.git)
+    except ValueError as exc:
+        print(f"rvs init: {exc}", file=sys.stderr)
+        return 2
+    print(f"Project '{args.name}' created in {args.project} from the {args.template} template.")
+    return 0
+
+
+def _selftest(args: argparse.Namespace) -> int:
+    from rvs_core import diagnostics
+
+    results = diagnostics.selftest()
+    for r in results:
+        print(f"{'ok  ' if r.ok else 'FAIL'} {r.name}" + (f"  ({r.detail})" if r.detail else ""))
+    failed = [r for r in results if not r.ok]
+    problems = diagnostics.verify_manifest(args.manifest) if args.manifest else []
+    for p in problems:
+        print(f"FAIL file integrity: {p}")
+    if failed or problems:
+        print(f"{len(failed) + len(problems)} problem(s) found.")
+        return 1
+    print("All checks passed.")
+    return 0
+
+
+def _guide(args: argparse.Namespace) -> int:
+    from rvs_core.guide import guide_path
+
+    path = guide_path()
+    if path is None:
+        print("rvs guide: the user guide is not part of this installation.", file=sys.stderr)
+        return 2
+    if args.output:
+        args.output.write_bytes(path.read_bytes())
+        print(f"Guide written to {args.output}.")
+    else:
+        print(path)
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -202,6 +268,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _export(args)
     if args.command == "import":
         return _import(args)
+    if args.command == "init":
+        return _init(args)
+    if args.command == "selftest":
+        return _selftest(args)
+    if args.command == "guide":
+        return _guide(args)
     if args.command in ("baseline", "cr", "diff"):
         return changecontrol.run(args)
     parser.print_help()

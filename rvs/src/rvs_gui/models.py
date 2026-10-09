@@ -1,5 +1,6 @@
 """Qt models for the item table and the findings list."""
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -42,6 +43,8 @@ COLUMNS = (
     Column("problems", "Problems"),
     Column("text", "Statement", False),
 )
+# Cells that expert mode edits in place (they are attributes of the item, not derived values).
+EDITABLE_KEYS = ("title", "type", "status", "priority", "owner", "verify_method", "verify_level")
 SEVERITY_COLOR = {
     Severity.ERROR: TOKENS["support_error"],
     Severity.WARNING: TOKENS["support_warning"],
@@ -55,8 +58,42 @@ class ItemTableModel(QAbstractTableModel):
         self._items: list[ItemData] = []
         self._counts: dict[str, tuple[int, int, int]] = {}
         self._row: dict[str, int] = {}
+        self.edit_handler: Callable[[str, str, str], bool] | None = None  # (uid, attribute, value) -> accepted
+        self.can_edit: Callable[[ItemData, str], bool] = lambda _item, _key: True
+        self.editing_enabled = False
+
+    def set_editing(self, enabled: bool) -> None:
+        self.editing_enabled = enabled
+        if self._items:
+            self.dataChanged.emit(self.index(0, 0), self.index(len(self._items) - 1, len(COLUMNS) - 1))
+
+    def flags(self, index: Index) -> Qt.ItemFlag:
+        flags = super().flags(index)
+        if self.editing_enabled and index.isValid() and self.edit_handler is not None:
+            key = COLUMNS[index.column()].key
+            if key in EDITABLE_KEYS and self.can_edit(self._items[index.row()], key):
+                flags |= Qt.ItemFlag.ItemIsEditable
+        return flags
+
+    def setData(self, index: Index, value: Any, role: int = Qt.ItemDataRole.EditRole) -> bool:
+        if role != Qt.ItemDataRole.EditRole or not index.isValid() or self.edit_handler is None:
+            return False
+        key = COLUMNS[index.column()].key
+        item = self._items[index.row()]
+        if key not in EDITABLE_KEYS or not self.editing_enabled:
+            return False
+        new = "" if value is None else str(value).strip()
+        if new == self._value(item, key):
+            return False
+        return self.edit_handler(item.uid, key, new)
 
     def set_items(self, items: list[ItemData], counts: dict[str, tuple[int, int, int]]) -> None:
+        if self._items and [i.uid for i in items] == [i.uid for i in self._items]:
+            # same rows: update in place so selection, scroll position and open editors survive an edit
+            self._items = list(items)
+            self._counts = counts
+            self.dataChanged.emit(self.index(0, 0), self.index(len(items) - 1, len(COLUMNS) - 1))
+            return
         self.beginResetModel()
         self._items = list(items)
         self._counts = counts
@@ -101,7 +138,7 @@ class ItemTableModel(QAbstractTableModel):
         if not index.isValid():
             return None
         item, key = self._items[index.row()], COLUMNS[index.column()].key
-        if role == Qt.ItemDataRole.DisplayRole:
+        if role in (Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole):
             return self._value(item, key)
         if role == SORT_ROLE:
             if key == "problems":

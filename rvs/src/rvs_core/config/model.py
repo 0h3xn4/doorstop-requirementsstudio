@@ -21,6 +21,7 @@ class AttributeDef:
     type: str
     vocab: str | None = None
     required: bool = False
+    help: str = ""
 
 
 @dataclass(frozen=True)

@@ -24,3 +24,9 @@ def git_project(minimal_project: Path) -> Path:
 
     GitRepo.init(minimal_project)
     return minimal_project
+
+
+@pytest.fixture(autouse=True)
+def _isolated_user_config(tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch) -> None:
+    """No test may read or write the real user configuration folder."""
+    monkeypatch.setenv("RVS_CONFIG_DIR", str(tmp_path_factory.mktemp("userconfig")))

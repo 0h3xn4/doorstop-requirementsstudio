@@ -7,33 +7,33 @@ kinds:
     defaults: {status: draft}
     fingerprint: [title, type, verify_method, verify_level]
     attributes:
-      - {name: title, type: string, required: true}
-      - {name: rationale, type: text}
-      - {name: type, type: enum, vocab: type, required: true}
-      - {name: priority, type: enum, vocab: priority}
-      - {name: status, type: enum, vocab: status, required: true}
-      - {name: owner, type: string}
-      - {name: source, type: string}
-      - {name: standard_clause, type: string}
-      - {name: verify_method, type: enum, vocab: verify_method}
-      - {name: verify_level, type: enum, vocab: verify_level}
-      - {name: link_satisfies, type: uid-list}
-      - {name: link_refines, type: uid-list}
-      - {name: link_conflicts, type: uid-list}
+      - {name: title, type: string, required: true, help: "A short name for the requirement, as it should appear in lists and matrices."}
+      - {name: rationale, type: text, help: "Why the requirement exists: the need, constraint or analysis behind it. Reviewers read this first."}
+      - {name: type, type: enum, vocab: type, required: true, help: "What kind of requirement this is. It decides which quality rules apply (for example, functional requirements should not prescribe a design)."}
+      - {name: priority, type: enum, vocab: priority, help: "How important the requirement is to the mission. The scale is set by your project (config/vocab.yaml)."}
+      - {name: status, type: enum, vocab: status, required: true, help: "Where the requirement is in its life: draft, reviewed, approved, baselined or obsolete. Changing it never makes links suspect."}
+      - {name: owner, type: string, help: "The person or team responsible for the requirement."}
+      - {name: source, type: string, help: "Where the requirement comes from, for example a customer document, a review action or a parent requirement."}
+      - {name: standard_clause, type: string, help: "The clause of an applicable standard this requirement implements or tailors, for example from ECSS."}
+      - {name: verify_method, type: enum, vocab: verify_method, help: "How compliance will be shown: test, analysis, inspection or review of design."}
+      - {name: verify_level, type: enum, vocab: verify_level, help: "At which level the verification is performed: unit, subsystem or system."}
+      - {name: link_satisfies, type: uid-list, help: "Requirements this one satisfies in another branch of the tree (besides its parents). Item IDs, comma separated."}
+      - {name: link_refines, type: uid-list, help: "Requirements this one refines or details. Item IDs, comma separated."}
+      - {name: link_conflicts, type: uid-list, help: "Requirements this one conflicts with. Item IDs, comma separated; the link works both ways."}
       - {name: link_refs, type: ref-list}
       - {name: rvs_schema_version, type: int, required: true}
   verification:
     defaults: {v_status: planned}
     fingerprint: [title, verify_method, verify_level]
     attributes:
-      - {name: title, type: string, required: true}
-      - {name: proc_id, type: string}
-      - {name: verify_method, type: enum, vocab: verify_method, required: true}
-      - {name: verify_level, type: enum, vocab: verify_level, required: true}
-      - {name: v_status, type: enum, vocab: verification_status, required: true}
-      - {name: evidence, type: string}
-      - {name: executed_on, type: date}
-      - {name: responsible, type: string}
-      - {name: nonconformances, type: string-list}
-      - {name: link_verifies, type: uid-list}
+      - {name: title, type: string, required: true, help: "A short name for the requirement, as it should appear in lists and matrices."}
+      - {name: proc_id, type: string, help: "The identifier of the test procedure or analysis report."}
+      - {name: verify_method, type: enum, vocab: verify_method, required: true, help: "How compliance will be shown: test, analysis, inspection or review of design."}
+      - {name: verify_level, type: enum, vocab: verify_level, required: true, help: "At which level the verification is performed: unit, subsystem or system."}
+      - {name: v_status, type: enum, vocab: verification_status, required: true, help: "Progress of the verification: planned, in-progress, passed, failed or waived."}
+      - {name: evidence, type: string, help: "Where the proof is: a file path in the repository, or a document number and revision."}
+      - {name: executed_on, type: date, help: "The date the verification was carried out (YYYY-MM-DD)."}
+      - {name: responsible, type: string, help: "The person who carries out or signs off the verification."}
+      - {name: nonconformances, type: string-list, help: "References to non-conformance reports raised during this verification, comma separated."}
+      - {name: link_verifies, type: uid-list, help: "Requirements this verification item verifies. Item IDs, comma separated."}
       - {name: rvs_schema_version, type: int, required: true}

@@ -71,8 +71,14 @@ def item_digest(item: ItemData) -> str:
     return hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
 
 
+def _ref_safe(path: str) -> str:
+    """Git ref components cannot contain spaces or other special characters, nor start with a dot."""
+    parts = [re.sub(r"[^A-Za-z0-9._-]", "_", p).lstrip(".") or "_" for p in path.split("/") if p]
+    return "/".join(parts)
+
+
 def _tag_name(repo: GitRepo, root: Path, name: str) -> str:
-    rel = repo.relative(root)
+    rel = _ref_safe(repo.relative(root))
     return f"rvs/baseline/{rel + '/' if rel else ''}{name}"
 
 

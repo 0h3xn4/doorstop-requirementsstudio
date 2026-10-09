@@ -96,3 +96,35 @@ def test_cache_does_not_alter_validation_results(minimal_project: Path):
     DoorstopProject.open(minimal_project).items()
     warm = [f.format() for f in validate_project(minimal_project, doorstop=False).findings]
     assert cold == warm
+
+
+def test_one_edit_parses_one_item_file_not_the_whole_document(tmp_path: Path, monkeypatch):  # type: ignore[no-untyped-def]
+    """Editing one item of a big document must not re-parse its other items (each parse is ~1 ms; 1,300 per document)."""
+    import shutil
+
+    from doorstop.core.item import Item
+
+    from conftest import EXAMPLES
+    from rvs_core.authoring import EditService
+    from rvs_core.validate import validate_project
+
+    root = tmp_path / "sat"
+    shutil.copytree(EXAMPLES / "satellite300", root, ignore=shutil.ignore_patterns(".rvs-cache"))
+    old = time.time() - 600
+    for p in root.rglob("*.yml"):
+        os.utime(p, (old, old))
+    validate_project(root, doorstop=False)  # warm the cache
+    parses: list[str] = []
+    original = Item.load
+
+    def counting(self, reload=False):  # type: ignore[no-untyped-def]
+        if reload or not self._loaded:
+            parses.append(str(self.uid))
+        return original(self, reload=reload)
+
+    monkeypatch.setattr(Item, "load", counting)
+    uid = next(i.uid for i in validate_project(root, doorstop=False).items if i.document == "EPS")
+    parses.clear()
+    EditService(root).update_item(uid, attrs={"owner": "someone"})
+    validate_project(root, doorstop=False)
+    assert 1 <= len(set(parses)) <= 3, sorted(set(parses))

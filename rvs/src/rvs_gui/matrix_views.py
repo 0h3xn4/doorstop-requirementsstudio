@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import QAbstractTableModel, QModelIndex, QObject, Qt, Signal
-from PySide6.QtGui import QBrush, QColor
+from PySide6.QtGui import QBrush, QColor, QShowEvent
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -101,7 +101,22 @@ class MatrixView(QWidget):
         lay.addWidget(self.provenance_label)
         lay.addWidget(self.notes_label)
         lay.addWidget(self.table, 1)
-        session.loaded.connect(self.refresh)
+        self.table.horizontalHeader().setResizeContentsPrecision(100)  # size columns from the first rows, not all 5,000
+        self._stale = False
+        session.loaded.connect(self._on_session_loaded)
+
+    def _on_session_loaded(self) -> None:
+        """Rebuild now if the tab is on screen, otherwise when it is next shown (a tab nobody looks at costs nothing)."""
+        if self.isVisible():
+            self.refresh()
+        else:
+            self._stale = True
+
+    def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 - Qt API
+        super().showEvent(event)
+        if self._stale:
+            self._stale = False
+            self.refresh()
 
     @property
     def matrix(self) -> MatrixTable:

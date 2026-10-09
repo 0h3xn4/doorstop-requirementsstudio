@@ -82,7 +82,9 @@ def _load_one(name: str, path: Path, relative: str, findings: list[Finding], *, 
 
 
 def _attr(raw: dict[str, Any]) -> AttributeDef:
-    return AttributeDef(raw["name"], raw["type"], raw.get("vocab"), bool(raw.get("required", False)))
+    return AttributeDef(
+        raw["name"], raw["type"], raw.get("vocab"), bool(raw.get("required", False)), str(raw.get("help", ""))
+    )
 
 
 def _check_reserved(names: list[str], source: str) -> None:

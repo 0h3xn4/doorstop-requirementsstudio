@@ -138,3 +138,43 @@ def test_baseline_and_diff_timings_at_5000_items(stress: Path, tmp_path: Path):
     for name, seconds in timings.items():
         print(f"\n{name:34} {seconds:6.1f} s")
     assert max(timings.values()) < 120
+
+
+def test_gui_edit_and_tab_switch_stay_responsive_at_5000_items(stress: Path, tmp_path: Path, qtbot):  # type: ignore[no-untyped-def]
+    """Open (cold, then warm), edit one cell in place, and show each tab, on 5,000 items."""
+    from PySide6.QtWidgets import QApplication
+
+    from rvs_gui.app import create_main_window
+
+    root = tmp_path / "stress"
+    shutil.copytree(stress, root, ignore=shutil.ignore_patterns(".rvs-cache"))
+    old = time.time() - 600
+    for p in root.rglob("*.yml"):
+        os.utime(p, (old, old))
+    win = create_main_window()
+    qtbot.addWidget(win)
+    win.show()
+    timings: dict[str, float] = {}
+
+    def timed(name: str, fn):  # type: ignore[no-untyped-def]
+        t = time.perf_counter()
+        out = fn()
+        QApplication.processEvents()
+        timings[name] = time.perf_counter() - t
+        return out
+
+    assert timed("open (cold cache)", lambda: win.open_project(root))
+    assert timed("open (warm cache)", lambda: win.open_project(root))
+    win.set_mode("expert")
+    uid = win.session.items[100].uid
+    assert timed("inline edit of one cell", lambda: win.inline_edit(uid, "owner", "perf"))
+    win.select_item(win.session.items[2500].uid)
+    win.editor.field("owner").setText("perf-2")
+    assert timed("save from the editor", win.editor.save)
+    for i in range(win.tabs.count()):
+        timed(f"show tab {win.tabs.tabText(i)}", lambda i=i: win.tabs.setCurrentIndex(i))
+    for name, seconds in timings.items():
+        print(f"\n{name:34} {seconds:6.2f} s")
+    assert timings["open (cold cache)"] < 12 and timings["open (warm cache)"] < 4
+    assert timings["inline edit of one cell"] < 2.5 and timings["save from the editor"] < 2.5
+    assert max(v for k, v in timings.items() if k.startswith("show tab")) < 6

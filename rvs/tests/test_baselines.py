@@ -184,3 +184,15 @@ def test_manifest_digest_matches_the_tag_message(git_project: Path):
     assert tag is not None
     digest = hashlib.sha256((git_project / "baselines" / "PDR.yaml").read_bytes()).hexdigest()
     assert digest in tag.message and b.manifest_sha256 == digest
+
+
+def test_project_path_with_spaces_and_dot_folders_still_gets_a_valid_tag(tmp_path: Path):
+    from rvs_core.examples.minimal import build_minimal_project
+
+    repo_root = tmp_path / "repo"
+    GitRepo.init(repo_root)
+    proj = repo_root / ".hidden dir" / "my project (v2)"
+    build_minimal_project(proj)
+    b = create_baseline(proj, "PDR", "d", user="a")
+    assert b.tag == "rvs/baseline/hidden_dir/my_project__v2_/PDR"
+    assert GitRepo.discover(proj).tag(b.tag) is not None and verify_baseline(proj, "PDR") == []

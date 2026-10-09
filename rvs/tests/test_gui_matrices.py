@@ -81,6 +81,7 @@ def test_new_verification_dialog_lists_verification_documents(win: MainWindow, q
 # traceability matrix -------------------------------------------------------------------------
 def test_traceability_view(win: MainWindow):
     v = win.trace_view
+    win.tabs.setCurrentWidget(v)  # hidden tabs refresh when first shown
     v.source.setCurrentText("SYS")
     v.target.setCurrentText("EPS")
     v.direction.setCurrentText("down")
@@ -94,6 +95,7 @@ def test_traceability_view(win: MainWindow):
 
 def test_traceability_view_up_direction(win: MainWindow):
     v = win.trace_view
+    win.tabs.setCurrentWidget(v)
     v.source.setCurrentText("EPS")
     v.target.setCurrentText("SYS")
     v.direction.setCurrentText("up")
@@ -123,7 +125,15 @@ def test_vcm_shows_provenance_and_placeholder_note(win: MainWindow):
 
 
 # coverage ----------------------------------------------------------------------------------------------
+def test_hidden_tabs_refresh_when_shown_not_before(win: MainWindow):
+    win.session.create_item("SYS", "The spacecraft shall be lonely.", attrs={"title": "Lonely", "type": "functional"})
+    assert win.vcm_view._stale is True  # noqa: SLF001 - nothing was rebuilt for a tab nobody is looking at
+    win.tabs.setCurrentWidget(win.vcm_view)
+    assert win.vcm_view._stale is False and "SYS-0005" in {r[0] for r in win.vcm_view.matrix.rows}  # noqa: SLF001
+
+
 def test_coverage_view(win: MainWindow):
+    win.tabs.setCurrentWidget(win.coverage_view)
     assert _cells(win.coverage_view.model) == ["SYS", "EPS", "VER"]
     assert win.coverage_view.model.index(0, 2).data() == "3"
 
@@ -179,8 +189,11 @@ def test_satellite_matrices_open_and_gaps_are_flagged(qtbot, tmp_path: Path):  #
     qtbot.addWidget(w)
     w.show()
     assert w.open_project(root)
+    w.tabs.setCurrentWidget(w.vcm_view)
     assert w.vcm_view.model.rowCount() > 250
+    w.tabs.setCurrentWidget(w.coverage_view)
     assert w.coverage_view.model.rowCount() == 10
+    w.tabs.setCurrentWidget(w.trace_view)
     w.trace_view.source.setCurrentText("SYS")
     w.trace_view.target.setCurrentText("EPS")
     assert w.trace_view.model.rowCount() == 50

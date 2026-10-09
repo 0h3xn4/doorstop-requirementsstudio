@@ -3,6 +3,7 @@
 Only local operations: no remote access of any kind. Commits are never signed (a user's global signing setup would
 need external programs), and only files inside the project directory are staged."""
 
+import contextlib
 import getpass
 import os
 import time
@@ -42,6 +43,13 @@ class GitRepo:
         self._repo = repo
         self._refs: Any = repo.refs  # dulwich types refs as a NewType of bytes; plain bytes are fine at runtime
         self.root = Path(repo.path).resolve()
+
+    def close(self) -> None:
+        self._repo.close()
+
+    def __del__(self) -> None:  # dulwich warns about packs that are still open when the object store is collected
+        with contextlib.suppress(Exception):  # interpreter shutdown, or already closed
+            self._repo.close()
 
     # construction ##############################################################
     @classmethod

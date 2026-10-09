@@ -143,6 +143,7 @@ def test_verify_button_reports(win: MainWindow, qtbot):  # type: ignore[no-untyp
 
 
 def test_outputs_carry_the_latest_baseline_in_their_provenance(win: MainWindow, qtbot):  # type: ignore[no-untyped-def]
+    win.tabs.setCurrentWidget(win.vcm_view)
     assert "no baseline" in win.vcm_view.provenance_label.text()
     with qtbot.waitSignal(win.baselines_view.baseline_done, timeout=60000):
         win.baselines_view.create_baseline("PDR", "d", {})

@@ -50,7 +50,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 rvs_gui = ["assets/fonts/*"]
-rvs_core = ["config/defaults/*.yaml", "config/schemas/*.json", "exporters/fonts/*"]
+rvs_core = ["config/defaults/*.yaml", "config/schemas/*.json", "exporters/fonts/*", "guide/*.html"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

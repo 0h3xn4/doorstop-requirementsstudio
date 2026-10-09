@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Requirements &amp; Verification Studio: user guide</title><style>
+body { font-family: 'IBM Plex Sans', sans-serif; font-size: 11pt; color: #161616; margin: 12px 24px; }
+h1 { font-size: 22pt; margin-top: 28px; border-bottom: 1px solid #e0e0e0; }
+h2 { font-size: 16pt; margin-top: 20px; }
+h3 { font-size: 13pt; }
+code { font-family: 'IBM Plex Mono', monospace; background-color: #f4f4f4; }
+pre { font-family: 'IBM Plex Mono', monospace; background-color: #f4f4f4; padding: 8px; }
+table { border-collapse: collapse; }
+th { background-color: #e0e0e0; text-align: left; padding: 4px 8px; }
+td { padding: 4px 8px; border-top: 1px solid #e0e0e0; }
+a { color: #0f62fe; }
+.toc li { margin-bottom: 2px; }
+</style></head><body>
+<div class="toc"><h2>Contents</h2><ul><li><a href="#requirements-verification-studio">Requirements &amp;amp; Verification Studio</a><ul><li><a href="#getting-started">Getting started</a></li><li><a href="#installation-and-checks">Installation and checks</a></li></ul></li><li><a href="#guided-walkthrough">Guided walkthrough</a><ul><li><a href="#1-find-your-way-around">1. Find your way around</a></li><li><a href="#2-write-a-new-requirement">2. Write a new requirement</a></li><li><a href="#3-edit-an-existing-requirement">3. Edit an existing requirement</a></li><li><a href="#4-fix-problems">4. Fix problems</a></li><li><a href="#5-see-the-whole-picture">5. See the whole picture</a></li><li><a href="#6-produce-documents">6. Produce documents</a></li><li><a href="#7-control-changes">7. Control changes</a></li></ul></li><li><a href="#expert-walkthrough">Expert walkthrough</a><ul><li><a href="#work-from-the-keyboard">Work from the keyboard</a></li><li><a href="#edit-in-the-table">Edit in the table</a></li><li><a href="#bulk-changes-with-a-spreadsheet">Bulk changes with a spreadsheet</a></li><li><a href="#scripting-and-automation">Scripting and automation</a></li><li><a href="#large-projects">Large projects</a></li></ul></li><li><a href="#change-control">Change control</a><ul><li><a href="#change-requests">Change requests</a></li><li><a href="#reasons-for-change">Reasons for change</a></li><li><a href="#baselines">Baselines</a></li><li><a href="#comparing-versions">Comparing versions</a></li><li><a href="#suspect-links">Suspect links</a></li></ul></li><li><a href="#import-and-export">Import and export</a><ul><li><a href="#what-can-be-exported">What can be exported</a></li><li><a href="#importing-items">Importing items</a></li></ul></li><li><a href="#command-reference">Command reference</a><ul><li><a href="#rvs-validate">rvs validate</a></li><li><a href="#rvs-init">rvs init</a></li><li><a href="#rvs-export">rvs export</a></li><li><a href="#rvs-import">rvs import</a></li><li><a href="#rvs-cr">rvs cr</a></li><li><a href="#rvs-baseline">rvs baseline</a></li><li><a href="#rvs-diff">rvs diff</a></li><li><a href="#rvs-selftest">rvs selftest</a></li><li><a href="#rvs-guide">rvs guide</a></li><li><a href="#rvs-version">rvs --version</a></li></ul></li><li><a href="#reference">Reference</a><ul><li><a href="#keyboard-shortcuts">Keyboard shortcuts</a></li><li><a href="#project-files-and-format">Project files and format</a></li><li><a href="#configuration-files">Configuration files</a></li><li><a href="#quality-rules">Quality rules</a></li><li><a href="#finding-codes">Finding codes</a></li><li><a href="#troubleshooting">Troubleshooting</a></li></ul></li></ul></div>
+<a name="requirements-verification-studio"></a><h1 id="requirements-verification-studio">Requirements &amp; Verification Studio</h1>
+<p>This guide is part of the application and works without a network connection. Press <strong>F1</strong> in the application to open it. The same text is available on the command line with <code>rvs guide</code>.</p>
+<p>Requirements &amp; Verification Studio (RVS) manages requirements and their verification for engineering projects, with traceability, change control and baselines. Your data is stored as plain text files in a folder, so it can be kept under Git and read without RVS.</p>
+<p><strong>Nothing leaves your computer.</strong> RVS never connects to a network: there is no update check, no telemetry and no cloud service.</p>
+<a name="getting-started"></a><h2 id="getting-started">Getting started</h2>
+<a name="install-and-start"></a><h3 id="install-and-start">Install and start</h3>
+<p>Run the installer for your system (see <em>Installation and checks</em> below) and start <strong>Requirements &amp; Verification Studio</strong> from the application menu, or run <code>rvs-studio</code> in a terminal.</p>
+<a name="your-first-project"></a><h3 id="your-first-project">Your first project</h3>
+<p>Choose one of three ways:</p>
+<ol>
+<li><strong>File &gt; Open Example</strong> creates a copy of a fictional example project and opens it. The <em>Small satellite</em> example has about 300 requirements, including a few seeded defects you can find in the Problems panel. Use this to explore.</li>
+<li><strong>File &gt; New Project…</strong> (Ctrl+Alt+N) creates an empty project from a template: <em>Minimal</em> (system, subsystem, verification plan), <em>Small satellite</em> (mission, system, seven subsystems, verification plan) or <em>Software product</em> (system, software, interfaces, tests). Tick <em>Keep this project under Git</em> if you want baselines.</li>
+<li><strong>File &gt; Open Project…</strong> (Ctrl+O) opens an existing RVS project folder. <strong>File &gt; Open Recent</strong> lists the last eight.</li>
+</ol>
+<p>The same from the command line: <code>rvs init my-project --name "My project" --template satellite --git</code>.</p>
+<a name="the-window"></a><h3 id="the-window">The window</h3>
+<ul>
+<li><strong>Documents</strong> (left): the document tree. Click a document to filter the item table; click an item to open it.</li>
+<li><strong>Items</strong> tab: the table of items on the left, the editor on the right.</li>
+<li><strong>Problems</strong> (bottom): everything the project's quality rules and link checks found. Double-click a row to jump to the item.</li>
+<li><strong>Impact</strong> (right): which items are affected if the selected item changes.</li>
+<li>Tabs for <strong>Traceability</strong>, <strong>VCM</strong> (verification control matrix), <strong>Coverage</strong>, <strong>Graph</strong>, <strong>Changes</strong>, <strong>Baselines</strong> and <strong>Diff</strong>.</li>
+</ul>
+<a name="guided-and-expert-mode"></a><h3 id="guided-and-expert-mode">Guided and expert mode</h3>
+<p>RVS starts in <strong>guided mode</strong>: a step-by-step wizard for new requirements, a line of help under every field and a roomy table. When you know the tool, switch to <strong>expert mode</strong> with <strong>View &gt; Mode</strong> or <strong>Ctrl+Shift+M</strong>: a dense table you can edit directly, and the quick "new item" dialog. Your choice is remembered.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Guided</th>
+<th>Expert</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>New requirement</td>
+<td>Wizard with live quality hints</td>
+<td>Small dialog (document, title, parents)</td>
+</tr>
+<tr>
+<td>Field help</td>
+<td>Shown under every field</td>
+<td>Tooltips only</td>
+</tr>
+<tr>
+<td>Item table</td>
+<td>Read-only, comfortable rows</td>
+<td>Dense rows, edit cells in place</td>
+</tr>
+</tbody>
+</table>
+<p>Both modes use the same data and the same rules; nothing is hidden in guided mode.</p>
+<a name="help-from-the-application"></a><h3 id="help-from-the-application">Help from the application</h3>
+<ul>
+<li><strong>F1</strong> opens this guide. <strong>Ctrl+/</strong> lists all keyboard shortcuts.</li>
+<li>Hover over any field in the editor to read what it means.</li>
+<li>Problems always say what is wrong <em>and</em> how to fix it.</li>
+</ul>
+<a name="installation-and-checks"></a><h2 id="installation-and-checks">Installation and checks</h2>
+<a name="installing"></a><h3 id="installing">Installing</h3>
+<p>On Linux, unpack the release and run <code>./install.sh</code> (it installs for your user only and needs no administrator rights). On Windows, run the installer, which also installs for your user. <code>./uninstall.sh</code> removes the program and leaves your projects and settings untouched.</p>
+<a name="checking-an-installation"></a><h3 id="checking-an-installation">Checking an installation</h3>
+<p><code>rvs selftest</code> checks the installed program: bundled fonts and configuration, a sample project, an export in every format, a baseline in a scratch Git repository, and that the offline guard is active. It prints one line per check and exits with 0 when everything is fine. <code>rvs selftest --manifest &lt;folder&gt;</code> also verifies every installed file against <code>MANIFEST.sha256</code>, which shows whether files were damaged or altered after installation.</p>
+<a name="where-rvs-keeps-its-own-settings"></a><h3 id="where-rvs-keeps-its-own-settings">Where RVS keeps its own settings</h3>
+<p>Preferences (mode, recent projects, shortcut overrides, window size) are in a small <code>settings.json</code> in your user configuration folder (<code>~/.config/rvs</code> on Linux, <code>%APPDATA%\rvs</code> on Windows). Set <code>RVS_CONFIG_DIR</code> to use another folder. This file never contains project content.</p>
+<a name="if-something-unexpected-happens"></a><h3 id="if-something-unexpected-happens">If something unexpected happens</h3>
+<p>RVS shows a plain message and writes a short report to the <code>crash</code> folder next to <code>settings.json</code>. The report contains the error type and program locations only, never requirement text, so it is safe to send to the maintainers. Your saved project files are not affected.</p>
+<a name="guided-walkthrough"></a><h1 id="guided-walkthrough">Guided walkthrough</h1>
+<p>This walkthrough uses the <em>Small satellite</em> example (<strong>File &gt; Open Example</strong>). Everything in it is fictional.</p>
+<a name="1-find-your-way-around"></a><h2 id="1-find-your-way-around">1. Find your way around</h2>
+<p>Click <strong>EPS</strong> in the Documents panel. The table shows the electrical power subsystem requirements. Select one: the editor on the right shows its statement, its fields (each with a line of help) and <strong>Problems with this item</strong>.</p>
+<p>Use <strong>Ctrl+F</strong> to search by ID, title or statement, the status box to filter, and <em>Only items with problems</em> to see what needs attention. <strong>Ctrl+G</strong> jumps to an ID. <strong>F8</strong> and <strong>Shift+F8</strong> step through the items that have problems.</p>
+<a name="2-write-a-new-requirement"></a><h2 id="2-write-a-new-requirement">2. Write a new requirement</h2>
+<p>Press <strong>Ctrl+N</strong> (or <strong>Item &gt; New Requirement…</strong>). The wizard has five steps:</p>
+<ol>
+<li><strong>Where does it belong?</strong> Pick the document. For every document except the top-level one, tick the parent requirement(s) it derives from; <em>Next</em> stays disabled until you do, because a requirement without a parent cannot be traced.</li>
+<li><strong>What must it say?</strong> Type the statement. Below it, quality hints appear while you type: a missing "shall", vague words such as "adequate", several requirements in one sentence, acronyms that are not in the glossary. The hints never block you. Undefined acronyms are underlined in red.</li>
+<li><strong>Details.</strong> Every field of the document template, with help text: title, rationale, type, priority, status, owner, source, standard clause, verification method and level, and the typed links. Fields marked * are required.</li>
+<li><strong>How will you show it is met?</strong> Tick <em>Also create a planned verification item</em> to create a linked verification item in the verification plan, using the method and level from the previous step.</li>
+<li><strong>Review.</strong> A summary of what will be created and everything the rules found. Click <em>Finish</em> to create the requirement; you can fix remaining hints later in the editor.</li>
+</ol>
+<p>The new item is selected in the editor and a green message names the IDs that were created.</p>
+<a name="3-edit-an-existing-requirement"></a><h2 id="3-edit-an-existing-requirement">3. Edit an existing requirement</h2>
+<p>Select an item, change fields or the statement (the preview shows the formatted Markdown), and press <strong>Ctrl+S</strong>. <strong>Ctrl+R</strong> reverts.</p>
+<ul>
+<li><em>Parents</em> completes item IDs from the parent document as you type.</li>
+<li><em>Owner</em>, <em>Source</em> and similar fields complete from values already used in the project.</li>
+<li>If the item is baselined, a <strong>reason for change</strong> is required; type it in the box next to <em>Save</em>. The reason is stored in the item's history.</li>
+<li><strong>Clear suspect links</strong> appears when a parent changed after this item was last reviewed. Review the parent first, then accept it.</li>
+</ul>
+<a name="4-fix-problems"></a><h2 id="4-fix-problems">4. Fix problems</h2>
+<p>Open the Problems panel. Each row has a code, the item, a message and <strong>How to fix</strong>. Examples: <code>RVS-RULE-SHALL-PRESENT</code> (add "shall"), <code>RVS-LINK-SUSPECT</code> (a parent changed; review and clear), <code>RVS-RULE-UNDEFINED-ACRONYM</code> (add the acronym to the glossary with <strong>Project &gt; Glossary and Acronyms…</strong>, Ctrl+Shift+G). <em>Run Full Doorstop Validation</em> (Ctrl+Shift+V) additionally runs Doorstop's own tree checks.</p>
+<a name="5-see-the-whole-picture"></a><h2 id="5-see-the-whole-picture">5. See the whole picture</h2>
+<ul>
+<li><strong>Traceability</strong> shows which items of one document are linked from another, in both directions.</li>
+<li><strong>VCM</strong> lists every requirement with its verification method, level and the verification items that cover it. Rows with gaps are shaded. Filter by document, method, level or status.</li>
+<li><strong>Coverage</strong> shows, per document, how many requirements have children and verification.</li>
+<li><strong>Graph</strong> draws the neighbourhood of the selected item.</li>
+<li>The <strong>Impact</strong> panel lists everything that depends on the selected item, so you can see what a change would touch.</li>
+</ul>
+<a name="6-produce-documents"></a><h2 id="6-produce-documents">6. Produce documents</h2>
+<p><strong>File &gt; Export…</strong> (Ctrl+E) writes a matrix, a specification document or the items table in HTML, DOCX, PDF, XLSX, CSV or JSON. Exports run in the background and name the project, the baseline (or "working copy") and the date.</p>
+<a name="7-control-changes"></a><h2 id="7-control-changes">7. Control changes</h2>
+<p>Raise a <strong>change request</strong> in the Changes tab, tick <em>Attribute my edits to this change request</em> and every edit you make is recorded against it. When a milestone is reached, create a <strong>baseline</strong> with <strong>Project &gt; New Baseline…</strong>. See <em>Change control</em> for details.</p>
+<a name="expert-walkthrough"></a><h1 id="expert-walkthrough">Expert walkthrough</h1>
+<p>Switch to expert mode with <strong>Ctrl+Shift+M</strong> (or <strong>View &gt; Mode</strong>). The status bar shows <em>Expert mode</em>.</p>
+<a name="work-from-the-keyboard"></a><h2 id="work-from-the-keyboard">Work from the keyboard</h2>
+<table>
+<thead>
+<tr>
+<th>Task</th>
+<th>Keys</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Search items</td>
+<td>Ctrl+F, type, Down to the table</td>
+</tr>
+<tr>
+<td>Go to an ID</td>
+<td>Ctrl+G, type the full ID (upper or lower case)</td>
+</tr>
+<tr>
+<td>New requirement</td>
+<td>Ctrl+N: document, title, parents (IDs complete as you type)</td>
+</tr>
+<tr>
+<td>New verification item</td>
+<td>Ctrl+Shift+N: the requirements it verifies</td>
+</tr>
+<tr>
+<td>Save, revert</td>
+<td>Ctrl+S, Ctrl+R</td>
+</tr>
+<tr>
+<td>Next / previous problem</td>
+<td>F8, Shift+F8</td>
+</tr>
+<tr>
+<td>Switch tabs</td>
+<td>Ctrl+1 … Ctrl+8</td>
+</tr>
+<tr>
+<td>Refresh</td>
+<td>F5</td>
+</tr>
+</tbody>
+</table>
+<p>The complete list is in <em>Keyboard shortcuts</em> at the end of this guide, and in <strong>Help &gt; Keyboard Shortcuts</strong>. To change a shortcut, add it under <code>"shortcuts"</code> in <code>settings.json</code>, for example <code>{"shortcuts": {"export": "Ctrl+Alt+E"}}</code>.</p>
+<a name="edit-in-the-table"></a><h2 id="edit-in-the-table">Edit in the table</h2>
+<p>In expert mode, double-click a cell (or press F2) to edit it in place. Editable columns: <em>Title, Type, Status, Priority, Owner, Method, Level</em>. Enumerated columns open a drop-down with the project's vocabulary; a value outside the vocabulary is refused with a message. Every cell edit is a normal edit: it is saved immediately, checked by the rules and recorded in the item's history. If the item is baselined, RVS asks for the reason first.</p>
+<p>Show more columns through <strong>View &gt; Columns</strong> or by right-clicking the table header (for example <em>Parents</em>, <em>Statement</em>, <em>Document</em>, <em>Priority</em>).</p>
+<a name="bulk-changes-with-a-spreadsheet"></a><h2 id="bulk-changes-with-a-spreadsheet">Bulk changes with a spreadsheet</h2>
+<p>For changes to many items, export the items table, edit it in Excel and import it:</p>
+<pre><code>rvs export my-project --items --format xlsx -o items.xlsx
+rvs import my-project items.xlsx --dry-run
+rvs import my-project items.xlsx --reason &quot;Re-numbered after review&quot;
+</code></pre>
+<p>The dry run lists, per row, whether an item would be created, updated or left unchanged, and every row-level error. Nothing is written unless the whole file is clean, or you pass <code>--skip-errors</code>. In the GUI use <strong>File &gt; Import Items…</strong>.</p>
+<a name="scripting-and-automation"></a><h2 id="scripting-and-automation">Scripting and automation</h2>
+<p>Every operation of the application is also available on the command line (see <em>Command reference</em>). <code>rvs validate</code> returns exit code 0 (no errors), 1 (errors, or warnings when <code>--strict</code> is given) or 3 (the project cannot be loaded), which suits a build pipeline:</p>
+<pre><code>rvs validate my-project --format json --strict
+</code></pre>
+<a name="large-projects"></a><h2 id="large-projects">Large projects</h2>
+<p>Opening a project with several thousand items takes a few seconds; RVS keeps a cache in <code>.rvs-cache</code> (it is ignored by Git and by Doorstop) so later opens are quicker. The Problems panel and tables remain responsive while exports and project opening run in the background.</p>
+<a name="change-control"></a><h1 id="change-control">Change control</h1>
+<p>RVS supports a light configuration-management workflow: change requests that record why things changed, baselines that freeze an agreed state, and a comparison between any two states.</p>
+<a name="change-requests"></a><h2 id="change-requests">Change requests</h2>
+<p>A change request (CR) is a small file <code>changes/CR-0001.yaml</code> with a title, a description, the affected items and a status log. Create one in the <strong>Changes</strong> tab (fill in the form, press <em>New</em>) or with <code>rvs cr new</code>.</p>
+<ul>
+<li>Statuses (default): <code>open</code>, <code>in-review</code>, <code>approved</code>, <code>implemented</code>, <code>closed</code>, <code>rejected</code>, <code>deferred</code>. They are configuration (<code>config/changes.yaml</code>); the names are a starting point to adapt to your own process.</li>
+<li>Tick <em>Attribute my edits to this change request</em> in the Changes tab (or pass <code>--cr CR-0001</code> to <code>rvs import</code>) and the item history records the CR for every edit. The tab lists the items edited under a CR.</li>
+<li>The status bar shows <em>editing under CR-0001</em> while a CR is active.</li>
+</ul>
+<a name="reasons-for-change"></a><h2 id="reasons-for-change">Reasons for change</h2>
+<p>Once an item is <strong>baselined</strong>, every edit needs a reason (the statuses that require one are configurable: <code>change_control.reason_required_statuses</code> in <code>config/rules.yaml</code>): a box in the editor, a prompt for in-table edits, <code>--reason</code> for imports. The reason is stored in the item's history (the <code>history/</code> folder of the project) together with who, when and which fields changed.</p>
+<a name="baselines"></a><h2 id="baselines">Baselines</h2>
+<p>A baseline is a named, immutable snapshot of the whole project, for example <code>SRR</code> or <code>CDR</code>. Create one with <strong>Project &gt; New Baseline…</strong> (Ctrl+Shift+B) or <code>rvs baseline create</code>.</p>
+<p>What happens:</p>
+<ol>
+<li>Open change requests block the baseline, unless you <strong>defer</strong> each one with a reason (the dialog offers a check box per CR; on the command line use <code>--defer CR-0001="after SRR"</code>).</li>
+<li>Items with status <em>approved</em> become <em>baselined</em>.</li>
+<li>A manifest <code>baselines/&lt;name&gt;.yaml</code> records a content digest of every item.</li>
+<li>The project folder is committed to Git and tagged <code>rvs/baseline/&lt;name&gt;</code> (an annotated tag). This needs the project to be in a Git repository; the dialog and <code>--init-git</code> can create one. RVS never signs commits and never talks to a remote: pushing is up to your normal Git workflow.</li>
+<li>A baseline name is never reused.</li>
+</ol>
+<p><code>rvs baseline verify &lt;project&gt; &lt;name&gt;</code> checks that the manifest still matches the tagged content. Tampering is also reported by <code>rvs validate</code> (<code>RVS-BASELINE-MODIFIED</code> for a changed manifest, <code>RVS-BASELINE-CORRUPT</code> for content that no longer matches it, <code>RVS-BASELINE-NOTAG</code> for a missing tag).</p>
+<p>Every export names the baseline it comes from. <code>rvs export … --baseline SRR</code> produces any matrix or document <em>as it was</em> at that baseline, using the configuration of that time.</p>
+<a name="comparing-versions"></a><h2 id="comparing-versions">Comparing versions</h2>
+<p>The <strong>Diff</strong> tab (or <code>rvs diff &lt;project&gt; &lt;left&gt; &lt;right&gt;</code>) compares two baselines, or a baseline and the working copy (<code>working</code>). It lists added, removed and changed items, and for changed items shows each field before and after. Statements are compared word by word: deletions are struck through, insertions underlined. Export the comparison as HTML, DOCX, PDF, CSV or JSON. The <strong>Baselines</strong> tab has a <em>Compare with working copy</em> button.</p>
+<a name="suspect-links"></a><h2 id="suspect-links">Suspect links</h2>
+<p>When a parent item changes after a child was reviewed, the link from the child is <em>suspect</em> (<code>RVS-LINK-SUSPECT</code>). Review the parent, then use <strong>Clear suspect links</strong> in the child's editor. RVS never clears suspect links on its own, and changing only the <em>status</em> of a parent does not make links suspect.</p>
+<a name="import-and-export"></a><h1 id="import-and-export">Import and export</h1>
+<a name="what-can-be-exported"></a><h2 id="what-can-be-exported">What can be exported</h2>
+<table>
+<thead>
+<tr>
+<th>Content</th>
+<th>Command</th>
+<th>Formats</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Verification control matrix (VCM)</td>
+<td><code>--vcm</code></td>
+<td>csv, json, xlsx, html, docx, pdf</td>
+</tr>
+<tr>
+<td>Traceability matrix between two documents</td>
+<td><code>--trace SRC:DST</code> (optionally <code>:up</code> or <code>:down</code>)</td>
+<td>same</td>
+</tr>
+<tr>
+<td>Coverage per document</td>
+<td><code>--coverage</code></td>
+<td>same</td>
+</tr>
+<tr>
+<td>Impact of changing one item</td>
+<td><code>--impact UID</code></td>
+<td>same</td>
+</tr>
+<tr>
+<td>Specification document(s)</td>
+<td><code>--spec [--document PREFIX]</code></td>
+<td>html, docx, pdf</td>
+</tr>
+<tr>
+<td>All items as a table</td>
+<td><code>--items</code></td>
+<td>csv, xlsx</td>
+</tr>
+</tbody>
+</table>
+<p>Binary formats (xlsx, docx, pdf) need an output file (<code>-o file</code>). Filters narrow the VCM: <code>--document</code>, <code>--method</code>, <code>--level</code>, <code>--status</code>, <code>--only-gaps</code>. Add <code>--baseline NAME</code> to export the state at a baseline.</p>
+<p>Every output carries its provenance: project, baseline (or <em>working copy</em>), date, user, and tool versions. Files are reproducible: exporting the same state twice gives byte-identical files when the date is the same.</p>
+<p>The VCM layout is a neutral placeholder. It will be aligned with ECSS wording only once you supply the standard's text (<code>TODO-STANDARD</code> in <code>config/standards.yaml</code>).</p>
+<a name="importing-items"></a><h2 id="importing-items">Importing items</h2>
+<p><code>rvs import</code> and <strong>File &gt; Import Items…</strong> read a CSV or XLSX table written by <code>export --items</code>. You can edit it in a spreadsheet and bring the changes back.</p>
+<ul>
+<li>Existing items are matched by ID; unchanged rows do nothing. A table with only <code>id</code> and <code>title</code> columns updates only titles.</li>
+<li>Rows with new IDs (or a blank ID) create items.</li>
+<li>Row-level errors are listed with the row number: unknown columns, values outside the vocabulary, missing parents, parents in the wrong document, duplicate IDs, and changes to baselined items without a reason.</li>
+<li>Nothing is written unless every row is valid, or you choose to skip the rows with errors.</li>
+<li>Each imported change is recorded in the item history.</li>
+</ul>
+<p>Always run <code>--dry-run</code> first on a large file.</p>
+<a name="command-reference"></a><h1 id="command-reference">Command reference</h1>
+<p><code>rvs</code> is the command line of the application. All commands work offline and never change a project unless they are meant to (<code>init</code>, <code>import</code>, <code>cr</code>, <code>baseline create</code>). Exit codes: <strong>0</strong> success, <strong>1</strong> problems found, <strong>2</strong> wrong usage, <strong>3</strong> the project cannot be loaded.</p>
+<a name="rvs-validate"></a><h2 id="rvs-validate">rvs validate</h2>
+<p><code>rvs validate PROJECT [--format text|json] [--strict] [--fast]</code></p>
+<p>Checks a project: file format, configuration, links, quality rules, change requests and baselines. <code>--strict</code> counts warnings as errors. <code>--fast</code> skips Doorstop's own tree validation (RVS checks still run), which matters for very large projects. <code>--format json</code> lists each finding with code, severity, item, message and how to fix it.</p>
+<a name="rvs-init"></a><h2 id="rvs-init">rvs init</h2>
+<p><code>rvs init FOLDER [--name NAME] [--template minimal|satellite|software] [--git]</code> creates a new project from a template; <code>rvs init --list-templates</code> shows the templates and what they contain. <code>--git</code> also creates a Git repository in the folder.</p>
+<a name="rvs-export"></a><h2 id="rvs-export">rvs export</h2>
+<p><code>rvs export PROJECT (--vcm | --trace SRC:DST[:up|down] | --coverage | --impact UID | --items | --spec) [--format csv|json|xlsx|html|docx|pdf] [-o|--output FILE] [--document PREFIX] [--method M] [--level L] [--status S] [--only-gaps] [--baseline NAME]</code></p>
+<p>See <em>Import and export</em>. Without <code>-o</code> text formats are written to standard output.</p>
+<a name="rvs-import"></a><h2 id="rvs-import">rvs import</h2>
+<p><code>rvs import PROJECT FILE [--dry-run] [--skip-errors] [--reason TEXT] [--cr CR-ID] [--user NAME]</code></p>
+<p>Imports a CSV or XLSX table of items. <code>--dry-run</code> shows the plan and writes nothing. Exit code 1 means rows had errors.</p>
+<a name="rvs-cr"></a><h2 id="rvs-cr">rvs cr</h2>
+<p>Change requests.</p>
+<ul>
+<li><code>rvs cr new PROJECT TITLE [-d|--description DESCRIPTION] [--item UID]… [--user NAME]</code> raises a change request.</li>
+<li><code>rvs cr list PROJECT</code> lists them with their status.</li>
+<li><code>rvs cr show PROJECT CR-ID</code> shows one, with its status log and the items edited under it.</li>
+<li><code>rvs cr status PROJECT CR-ID STATUS [--note TEXT] [--user NAME]</code> moves it to another status.</li>
+<li><code>rvs cr defer PROJECT CR-ID --reason TEXT [--user NAME]</code> defers it so it does not block baselines.</li>
+</ul>
+<a name="rvs-baseline"></a><h2 id="rvs-baseline">rvs baseline</h2>
+<ul>
+<li><code>rvs baseline create PROJECT NAME -m|--message MESSAGE [--defer CR-ID=REASON]… [--init-git] [--user NAME]</code> creates a baseline.</li>
+<li><code>rvs baseline list PROJECT [--format text|json]</code> lists baselines.</li>
+<li><code>rvs baseline verify PROJECT NAME</code> checks a baseline against its manifest and tag.</li>
+</ul>
+<a name="rvs-diff"></a><h2 id="rvs-diff">rvs diff</h2>
+<p><code>rvs diff PROJECT LEFT RIGHT [--document PREFIX] [--format text|json|csv|html|docx|pdf] [-o|--output FILE]</code></p>
+<p><code>LEFT</code> and <code>RIGHT</code> are baseline names or <code>working</code>.</p>
+<a name="rvs-selftest"></a><h2 id="rvs-selftest">rvs selftest</h2>
+<p><code>rvs selftest [--manifest FOLDER]</code> checks the installation; see <em>Installation and checks</em>.</p>
+<a name="rvs-guide"></a><h2 id="rvs-guide">rvs guide</h2>
+<p><code>rvs guide [-o|--output FILE]</code> prints where the offline user guide is, or copies it to <code>FILE</code>.</p>
+<a name="rvs-version"></a><h2 id="rvs-version">rvs --version</h2>
+<p>Prints the RVS and Doorstop versions.</p>
+<a name="reference"></a><h1 id="reference">Reference</h1>
+<a name="keyboard-shortcuts"></a><h2 id="keyboard-shortcuts">Keyboard shortcuts</h2>
+<table>
+<thead>
+<tr>
+<th>Shortcut</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Ctrl+O</strong></td>
+<td>Open a project folder</td>
+</tr>
+<tr>
+<td><strong>Ctrl+Alt+N</strong></td>
+<td>Create a new project from a template</td>
+</tr>
+<tr>
+<td><strong>Ctrl+I</strong></td>
+<td>Import items from CSV or XLSX</td>
+</tr>
+<tr>
+<td><strong>Ctrl+E</strong></td>
+<td>Export a matrix, specification or items table</td>
+</tr>
+<tr>
+<td><strong>Ctrl+Q</strong></td>
+<td>Quit</td>
+</tr>
+<tr>
+<td><strong>Ctrl+N</strong></td>
+<td>New requirement (wizard in guided mode, quick dialog in expert mode)</td>
+</tr>
+<tr>
+<td><strong>Ctrl+Shift+N</strong></td>
+<td>New verification item</td>
+</tr>
+<tr>
+<td><strong>Ctrl+S</strong></td>
+<td>Save the item being edited</td>
+</tr>
+<tr>
+<td><strong>Ctrl+R</strong></td>
+<td>Revert the item being edited</td>
+</tr>
+<tr>
+<td><strong>Ctrl+F</strong></td>
+<td>Search items (focus the search field)</td>
+</tr>
+<tr>
+<td><strong>Ctrl+G</strong></td>
+<td>Go to an item by ID</td>
+</tr>
+<tr>
+<td><strong>F8</strong></td>
+<td>Jump to the next problem</td>
+</tr>
+<tr>
+<td><strong>Shift+F8</strong></td>
+<td>Jump to the previous problem</td>
+</tr>
+<tr>
+<td><strong>F6</strong></td>
+<td>Move the focus to the Problems panel</td>
+</tr>
+<tr>
+<td><strong>F5</strong></td>
+<td>Reload and re-check the project</td>
+</tr>
+<tr>
+<td><strong>Ctrl+Shift+V</strong></td>
+<td>Run Doorstop's full validation</td>
+</tr>
+<tr>
+<td><strong>Ctrl+Shift+B</strong></td>
+<td>Create a baseline</td>
+</tr>
+<tr>
+<td><strong>Ctrl+Shift+G</strong></td>
+<td>Edit the glossary and acronym list</td>
+</tr>
+<tr>
+<td><strong>Ctrl+Shift+M</strong></td>
+<td>Switch between guided and expert mode</td>
+</tr>
+<tr>
+<td><strong>F1</strong></td>
+<td>Open the user guide</td>
+</tr>
+<tr>
+<td><strong>Ctrl+/</strong></td>
+<td>Show this list of shortcuts</td>
+</tr>
+<tr>
+<td><strong>Ctrl+1</strong></td>
+<td>Show tab 1</td>
+</tr>
+<tr>
+<td><strong>Ctrl+2</strong></td>
+<td>Show tab 2</td>
+</tr>
+<tr>
+<td><strong>Ctrl+3</strong></td>
+<td>Show tab 3</td>
+</tr>
+<tr>
+<td><strong>Ctrl+4</strong></td>
+<td>Show tab 4</td>
+</tr>
+<tr>
+<td><strong>Ctrl+5</strong></td>
+<td>Show tab 5</td>
+</tr>
+<tr>
+<td><strong>Ctrl+6</strong></td>
+<td>Show tab 6</td>
+</tr>
+<tr>
+<td><strong>Ctrl+7</strong></td>
+<td>Show tab 7</td>
+</tr>
+<tr>
+<td><strong>Ctrl+8</strong></td>
+<td>Show tab 8</td>
+</tr>
+</tbody>
+</table>
+<a name="project-files-and-format"></a><h2 id="project-files-and-format">Project files and format</h2>
+<p>A project is a folder:</p>
+<pre><code>my-project/
+  rvs-project.yaml       project name, documents (prefix, kind, parent) and optional free attributes
+  config/                configuration, one file per topic (see below)
+  SYS/ SUB/ VER/ …       one folder per document, one YAML file per item (SYS-0001.yml)
+  changes/               change requests (CR-0001.yaml)
+  baselines/             baseline manifests (SRR.yaml)
+  history/               per-item edit history (who, when, which fields, why)
+  .rvs-cache/            disposable speed-up cache; ignored by Git and by Doorstop
+</code></pre>
+<p>Items are plain YAML written by Doorstop 3.2; the statement is the <code>text</code> field (Markdown). Item IDs look like <code>SYS-0012</code>. Typed links are stored in the linking item as lists of IDs (<code>link_satisfies</code>, <code>link_verifies</code>, …); parent links are Doorstop's <code>links</code>.</p>
+<p>Everything can be edited with a text editor, and diffed and merged with Git. RVS rewrites only the files of the items it changes.</p>
+<a name="configuration-files"></a><h2 id="configuration-files">Configuration files</h2>
+<p>All files live in <code>config/</code>, are validated against a schema when the project opens, and carry an <code>rvs_schema_version</code>. Files from an older version are migrated; files from a newer version are refused with a message. Missing files fall back to defaults and are reported as <code>RVS-CONFIG-DEFAULTED</code>.</p>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>config/numbering.yaml</code></td>
+<td>Item ID format: separator, digits, per-document overrides</td>
+</tr>
+<tr>
+<td><code>config/vocab.yaml</code></td>
+<td>Allowed values for type, priority, status, verification method, level and verification status</td>
+</tr>
+<tr>
+<td><code>config/templates.yaml</code></td>
+<td>Attributes per document kind (requirements, verification): type, required, vocabulary, help text, defaults</td>
+</tr>
+<tr>
+<td><code>config/rules.yaml</code></td>
+<td>Quality rules, their severity, parameters and whether they are enabled; which statuses need a reason for change</td>
+</tr>
+<tr>
+<td><code>config/links.yaml</code></td>
+<td>Typed links (satisfies, verifies, refines, conflicts-with): attribute, allowed source and target kinds</td>
+</tr>
+<tr>
+<td><code>config/exports.yaml</code></td>
+<td>Column layouts of the VCM and traceability exports, provenance fields</td>
+</tr>
+<tr>
+<td><code>config/standards.yaml</code></td>
+<td>Standards references; values not yet supplied stay <code>TODO-STANDARD</code></td>
+</tr>
+<tr>
+<td><code>config/glossary.yaml</code></td>
+<td>Terms and acronyms (edit with <strong>Project &gt; Glossary and Acronyms…</strong>)</td>
+</tr>
+<tr>
+<td><code>config/changes.yaml</code></td>
+<td>Change request statuses, which ones block a baseline, and what happens to item statuses at a baseline</td>
+</tr>
+</tbody>
+</table>
+<p>To add a field to every requirement, add an attribute to <code>config/templates.yaml</code>; the editor, the wizard, imports and exports pick it up. Use <code>TODO-COMPANY</code> or <code>TODO-STANDARD</code> to mark values your organisation still has to decide; RVS reports them until replaced (<code>RVS-STD-PLACEHOLDER</code>) and never invents standard text.</p>
+<a name="quality-rules"></a><h2 id="quality-rules">Quality rules</h2>
+<p>Configured in <code>config/rules.yaml</code>. Each rule has an ID, a severity (<code>error</code>, <code>warning</code> or <code>info</code>) and parameters. A finding's code is <code>RVS-RULE-</code> plus the ID in capitals.</p>
+<table>
+<thead>
+<tr>
+<th>Rule</th>
+<th>Code</th>
+<th>Default</th>
+<th>What it checks</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>shall-present</code></td>
+<td><code>RVS-RULE-SHALL-PRESENT</code></td>
+<td>error</td>
+<td>The statement uses "shall".</td>
+</tr>
+<tr>
+<td><code>single-statement</code></td>
+<td><code>RVS-RULE-SINGLE-STATEMENT</code></td>
+<td>warning</td>
+<td>One requirement per statement (at most one "shall").</td>
+</tr>
+<tr>
+<td><code>vague-words</code></td>
+<td><code>RVS-RULE-VAGUE-WORDS</code></td>
+<td>warning</td>
+<td>None of the configured vague words is used.</td>
+</tr>
+<tr>
+<td><code>no-implementation</code></td>
+<td><code>RVS-RULE-NO-IMPLEMENTATION</code></td>
+<td>warning</td>
+<td>A functional requirement does not prescribe a design.</td>
+</tr>
+<tr>
+<td><code>verify-method-set</code></td>
+<td><code>RVS-RULE-VERIFY-METHOD-SET</code></td>
+<td>warning</td>
+<td>A verification method is set.</td>
+</tr>
+<tr>
+<td><code>has-parent</code></td>
+<td><code>RVS-RULE-HAS-PARENT</code></td>
+<td>error</td>
+<td>The item has a parent unless it is in the root document.</td>
+</tr>
+<tr>
+<td><code>verified-when-approved</code></td>
+<td><code>RVS-RULE-VERIFIED-WHEN-APPROVED</code></td>
+<td>error</td>
+<td>An approved item has at least one verification link.</td>
+</tr>
+<tr>
+<td><code>undefined-acronym</code></td>
+<td><code>RVS-RULE-UNDEFINED-ACRONYM</code></td>
+<td>warning</td>
+<td>Acronyms used in text are defined in the glossary.</td>
+</tr>
+</tbody>
+</table>
+<p>One further code belongs to the rule machinery: <code>RVS-RULE-UNKNOWN</code> (<code>rules.yaml</code> enables a rule that this version does not provide).</p>
+<a name="finding-codes"></a><h2 id="finding-codes">Finding codes</h2>
+<p>Every problem has a stable code, a message and a hint on how to fix it.</p>
+<table>
+<thead>
+<tr>
+<th>Code</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>RVS-PROJECT-MISSING</code></td>
+<td>The project folder or a file it needs (such as <code>rvs-project.yaml</code>) does not exist.</td>
+</tr>
+<tr>
+<td><code>RVS-CONFIG-YAML</code></td>
+<td>A configuration file is not valid YAML.</td>
+</tr>
+<tr>
+<td><code>RVS-CONFIG-INVALID</code></td>
+<td>A configuration file does not match its schema.</td>
+</tr>
+<tr>
+<td><code>RVS-CONFIG-DEFAULTED</code></td>
+<td>A configuration file is missing; defaults are used.</td>
+</tr>
+<tr>
+<td><code>RVS-SCHEMA-MISSING</code></td>
+<td>A file has no <code>rvs_schema_version</code> (for an item it is treated as the current version; add <code>rvs_schema_version: 1</code>).</td>
+</tr>
+<tr>
+<td><code>RVS-SCHEMA-MISSING-FATAL</code></td>
+<td>Reserved: a file without a schema version that cannot be read at all.</td>
+</tr>
+<tr>
+<td><code>RVS-SCHEMA-INVALID</code></td>
+<td>The schema version is not a whole number.</td>
+</tr>
+<tr>
+<td><code>RVS-SCHEMA-OLDER</code></td>
+<td>A file is from an older version and was migrated in memory; saving writes the current version.</td>
+</tr>
+<tr>
+<td><code>RVS-SCHEMA-NOMIGRATION</code></td>
+<td>A file is older but no migration exists.</td>
+</tr>
+<tr>
+<td><code>RVS-SCHEMA-NEWER</code></td>
+<td>A file is from a newer version of RVS and is refused.</td>
+</tr>
+<tr>
+<td><code>RVS-TREE-INVALID</code></td>
+<td>The document tree cannot be read by Doorstop.</td>
+</tr>
+<tr>
+<td><code>RVS-DOC-MISSING</code></td>
+<td>A declared document has no folder.</td>
+</tr>
+<tr>
+<td><code>RVS-DOC-UNDECLARED</code></td>
+<td>A folder is a Doorstop document but is not declared in <code>rvs-project.yaml</code>.</td>
+</tr>
+<tr>
+<td><code>RVS-DOC-PARENT</code></td>
+<td>A document's parent differs from the declaration.</td>
+</tr>
+<tr>
+<td><code>RVS-DOC-FORMAT</code></td>
+<td>A document does not use YAML item files (warning).</td>
+</tr>
+<tr>
+<td><code>RVS-DOC-NUMBERING</code></td>
+<td>A document's ID format differs from <code>config/numbering.yaml</code>.</td>
+</tr>
+<tr>
+<td><code>RVS-DOC-FINGERPRINT</code></td>
+<td>A document's list of reviewed attributes differs from the template, so suspect-link detection would behave differently.</td>
+</tr>
+<tr>
+<td><code>RVS-ATTR-REQUIRED</code></td>
+<td>A required attribute is empty.</td>
+</tr>
+<tr>
+<td><code>RVS-ATTR-TYPE</code></td>
+<td>An attribute has the wrong type (for example a number where a list is expected).</td>
+</tr>
+<tr>
+<td><code>RVS-ATTR-UNKNOWN</code></td>
+<td>An item has an attribute that the template does not define; declare it under <code>free_attributes</code> in <code>rvs-project.yaml</code> or remove it.</td>
+</tr>
+<tr>
+<td><code>RVS-ATTR-VOCAB</code></td>
+<td>An attribute value is not in the project vocabulary.</td>
+</tr>
+<tr>
+<td><code>RVS-LINK-TARGET-MISSING</code></td>
+<td>A link points to an item that does not exist.</td>
+</tr>
+<tr>
+<td><code>RVS-LINK-KIND</code></td>
+<td>A typed link connects document kinds it may not connect.</td>
+</tr>
+<tr>
+<td><code>RVS-LINK-SELF</code></td>
+<td>An item links to itself.</td>
+</tr>
+<tr>
+<td><code>RVS-LINK-SUSPECT</code></td>
+<td>A parent changed after this item was reviewed.</td>
+</tr>
+<tr>
+<td><code>RVS-LINK-METHOD-MISMATCH</code></td>
+<td>A verification item uses a different method than the requirement it verifies.</td>
+</tr>
+<tr>
+<td><code>RVS-TRACE-NO-CHILD</code></td>
+<td>A requirement has no child requirement in the documents below it (warning; ignore it if no allocation is needed).</td>
+</tr>
+<tr>
+<td><code>RVS-STD-PLACEHOLDER</code></td>
+<td>Values marked <code>TODO-STANDARD</code> or <code>TODO-COMPANY</code> are still in use (information).</td>
+</tr>
+<tr>
+<td><code>RVS-CR-INVALID</code></td>
+<td>A change request file is not valid.</td>
+</tr>
+<tr>
+<td><code>RVS-CR-ITEM</code></td>
+<td>A change request lists an item that does not exist (warning).</td>
+</tr>
+<tr>
+<td><code>RVS-CR-STATUS</code></td>
+<td>A change request has a status that is not configured.</td>
+</tr>
+<tr>
+<td><code>RVS-BASELINE-MODIFIED</code></td>
+<td>The manifest of a baseline was changed after the baseline was created.</td>
+</tr>
+<tr>
+<td><code>RVS-BASELINE-CORRUPT</code></td>
+<td>The tagged content of a baseline does not match its manifest.</td>
+</tr>
+<tr>
+<td><code>RVS-BASELINE-NOTAG</code></td>
+<td>A baseline manifest exists but its Git tag is missing.</td>
+</tr>
+</tbody>
+</table>
+<a name="troubleshooting"></a><h2 id="troubleshooting">Troubleshooting</h2>
+<p><strong>"The project could not be opened."</strong> Read the message: it names the file and what to fix. <code>rvs validate PROJECT</code> shows the same findings with codes.</p>
+<p><strong>A save is refused because of a reason.</strong> The item is baselined. Type why you are changing it.</p>
+<p><strong>Baseline creation fails.</strong> Open change requests must be closed or deferred; and the project must be in a Git repository (the dialog offers to create one).</p>
+<p><strong>The window seems slow on a big project.</strong> The first open builds the cache; later opens are faster. <em>Only items with problems</em> and the document tree reduce what is shown.</p>
+<p><strong>I do not see a network feature.</strong> There is none, by design.</p>
+</body></html>

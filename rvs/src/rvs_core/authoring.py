@@ -103,6 +103,19 @@ class EditService:
                 f"{item.uid} is part of a baseline; every change needs a reason. Enter why you are changing it."
             )
 
+    def _check_values(self, prefix: str, attrs: Mapping[str, Any]) -> None:
+        """Reject values outside the project vocabulary (blank means unset)."""
+        decl = self._cfg.project.document(prefix)
+        if decl is None:
+            return
+        defs = self._cfg.attribute_defs(decl.kind)
+        for name, value in attrs.items():
+            adef = defs.get(name)
+            if adef is not None and adef.type == "enum" and adef.vocab and value not in (None, ""):
+                allowed = self._cfg.vocab.values(adef.vocab)
+                if value not in allowed:
+                    raise ValueError(f"'{value}' is not allowed for {name}. Use one of: {', '.join(allowed)}.")
+
     # operations #############################################################
     def create_item(
         self,
@@ -116,6 +129,7 @@ class EditService:
     ) -> ItemData:
         proj = DoorstopProject.open(self.root)
         self._check_parents(proj, prefix, parents)
+        self._check_values(prefix, attrs or {})
         decl = self._cfg.project.document(prefix)
         defaults = dict(self._cfg.templates.kinds[decl.kind].defaults) if decl else {}
         item = proj.add_item(prefix, text, attrs={**defaults, **(attrs or {})}, derived=derived)
@@ -129,6 +143,7 @@ class EditService:
     ) -> ItemData:
         proj = DoorstopProject.open(self.root)
         before = proj.get_item(uid)
+        self._check_values(before.document, attrs or {})
         self.require_reason(before, why)
         changed = [k for k, v in (attrs or {}).items() if before.attrs.get(k) != v]
         if text is not None and text.strip() != before.text.strip():

@@ -5,7 +5,6 @@ from typing import Any
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
-    QComboBox,
     QFormLayout,
     QHBoxLayout,
     QLabel,
@@ -23,22 +22,16 @@ from PySide6.QtWidgets import (
 from rvs_core.adapter import ItemData, ProjectError
 from rvs_core.authoring import ReasonRequiredError
 from rvs_core.config.model import AttributeDef
+from rvs_gui import fields
+from rvs_gui.completion import UidLineEdit
+from rvs_gui.fields import normalise as _norm
+from rvs_gui.fields import parse_list as _parse_list
 from rvs_gui.session import ProjectSession
 from rvs_gui.widgets import AcronymHighlighter
 
 # Attributes edited elsewhere or managed by RVS.
 _HIDDEN = {"rvs_schema_version"}
-_LIST_TYPES = {"uid-list", "string-list"}
-
-
-def _norm(value: Any, kind: str) -> Any:
-    if kind in _LIST_TYPES:
-        return [str(v) for v in value] if value else []
-    return "" if value is None else str(value)
-
-
-def _parse_list(text: str) -> list[str]:
-    return [p.strip() for p in text.replace(";", ",").split(",") if p.strip()]
+_LIST_TYPES = fields.LIST_TYPES
 
 
 class RequirementEditor(QWidget):
@@ -55,6 +48,8 @@ class RequirementEditor(QWidget):
         self._fields: dict[str, QWidget] = {}
         self._loading = False
         self._last_dirty = False
+        self._help_visible = True
+        self._help_labels: list[QLabel] = []
 
         self.heading = QLabel("No item selected")
         self.heading.setStyleSheet("font-size: 18px; font-weight: 600;")
@@ -120,74 +115,63 @@ class RequirementEditor(QWidget):
         while self.form.rowCount():
             self.form.removeRow(0)
         self._fields.clear()
+        self._help_labels.clear()
         cfg = self.session.cfg
         kind = self.session.kind_of(item.document)
         self._defs = [
             a for a in cfg.templates.kinds[kind].attributes if a.name not in _HIDDEN and a.type != "ref-list"
         ] + list(cfg.project.free_attributes)
         for adef in self._defs:
-            widget = self._make_widget(adef)
-            widget.setMinimumHeight(64 if isinstance(widget, QPlainTextEdit) else 32)
+            widget = fields.make_widget(self.session, adef, self._on_edited)
             self._fields[adef.name] = widget
-            self.form.addRow(adef.name.replace("_", " ").capitalize() + (" *" if adef.required else ""), widget)
+            self.form.addRow(fields.label_text(adef), widget)
+            self._add_help(fields.help_text(adef))
         decl = cfg.project.document(item.document)
         root_doc = decl is not None and decl.parent is None
-        parents = QLineEdit()
+        parent_doc = decl.parent if decl else None
+        parents = UidLineEdit(
+            lambda: [i.uid for i in self.session.items if i.document == parent_doc and i.normative and i.active]
+        )
         parents.setPlaceholderText("Parent item IDs, comma separated" if not root_doc else "Root document: no parents")
         parents.setEnabled(not root_doc)
         parents.setMinimumHeight(32)
+        parents.setToolTip(
+            "The requirements this one derives from (items of the parent document). Item IDs, comma separated."
+        )
         parents.textChanged.connect(self._on_edited)
         self._fields["parents"] = parents
         self.form.addRow("Parents", parents)
+        self._add_help("The requirements this one derives from, from the parent document." if not root_doc else "")
         rules = {r["id"]: r.get("params", {}) for r in cfg.rules["rules"]}
         params = rules.get("undefined-acronym", {})
         self.highlighter.configure(
             set(cfg.glossary.acronyms), int(params.get("min_length", 2)), set(params.get("ignore", []))
         )
 
-    def _make_widget(self, adef: AttributeDef) -> QWidget:
-        assert self.session.cfg is not None
-        if adef.type == "enum" and adef.vocab:
-            combo = QComboBox()
-            if not adef.required:
-                combo.addItem("")
-            combo.addItems(self.session.cfg.vocab.values(adef.vocab))
-            combo.currentTextChanged.connect(self._on_edited)
-            return combo
-        if adef.type == "text":
-            box = QPlainTextEdit()
-            box.setMaximumHeight(70)
-            box.textChanged.connect(self._on_edited)
-            return box
-        line = QLineEdit()
-        if adef.type == "date":
-            line.setPlaceholderText("YYYY-MM-DD")
-        if adef.type in _LIST_TYPES:
-            line.setPlaceholderText("comma separated")
-        line.textChanged.connect(self._on_edited)
-        return line
+    def _add_help(self, text: str) -> None:
+        label = fields.help_label(text)
+        label.setVisible(self._help_visible and bool(text))
+        self._help_labels.append(label)
+        self.form.addRow("", label)
+
+    def help_visible(self) -> bool:
+        return self._help_visible
+
+    def set_help_visible(self, visible: bool) -> None:
+        """Guided mode shows a line of help under every field; expert mode keeps the tooltips only."""
+        self._help_visible = visible
+        for label in self._help_labels:
+            label.setVisible(visible and bool(label.text()))
 
     def field(self, name: str) -> Any:
         return self._fields[name]
 
     # reading / writing widget values ##########################################
-    @staticmethod
-    def _get(widget: QWidget, kind: str) -> Any:
-        if isinstance(widget, QComboBox):
-            return widget.currentText()
-        raw = widget.toPlainText() if isinstance(widget, QPlainTextEdit) else widget.text()  # type: ignore[attr-defined]
-        raw = raw.strip()
-        return _parse_list(raw) if kind in _LIST_TYPES else raw
+    _get = staticmethod(fields.get_value)
 
     @staticmethod
     def _set(widget: QWidget, value: Any, kind: str) -> None:
-        text = ", ".join(value) if isinstance(value, list) else ("" if value is None else str(value))
-        if isinstance(widget, QComboBox):
-            widget.setCurrentIndex(max(0, widget.findText(text)))
-        elif isinstance(widget, QPlainTextEdit):
-            widget.setPlainText(text)
-        else:
-            widget.setText(text)  # type: ignore[attr-defined]
+        fields.set_value(widget, value)
 
     def load(self, uid: str) -> None:
         item = self.session.item(uid)
@@ -203,6 +187,7 @@ class RequirementEditor(QWidget):
             for adef in self._defs:
                 self._set(self._fields[adef.name], item.attrs.get(adef.name), adef.type)
             self._set(self._fields["parents"], list(item.links), "uid-list")
+            fields.refresh_completions(self.session, self._defs, self._fields)
             self.statement.setPlainText(item.text.strip())
             self.why.clear()
             self._refresh_findings()

@@ -90,6 +90,11 @@ project/
 - GUI tabs Changes / Baselines / Diff; New Baseline dialog; `ProjectSession.active_cr`; baseline creation, comparison and diff export run on worker threads.
 - Measured at 5,000 items: baseline create 7.9 s, deep verify (cold) 7.2 s, load a baseline snapshot 0.6 s, diff 0.1 s.
 
+## 5f. As built in M6
+- GUI: `wizard` (NewRequirementWizard -> RequirementSpec), `fields` (shared attribute widgets), `completion`, `shortcuts`, `glossary_dialog`, `project_dialogs`, `help_viewer`, `crash`; `MainWindow` gained modes, inline editing (`ItemTableModel.setData` + `EnumDelegate`), go-to / next problem, recent projects, new project, examples, async open.
+- Core: `userconfig`, `project_templates`, `rules/draft`, `diagnostics` (crash report, selftest, manifest), `guide`.
+- Release: `scripts/build_guide.py`, `build_release.sh`, `make_manifest.py`; `packaging/install-*.sh|ps1`.
+
 ## 6. Risks
 1. Doorstop's transitive network libs vs. offline test (DEVIATIONS V01).
 2. Doorstop load time at 5,000 items — benchmark in M1 spike; fallback is the one-pass cached index.

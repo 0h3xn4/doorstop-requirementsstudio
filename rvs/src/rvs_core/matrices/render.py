@@ -1,4 +1,4 @@
-"""Text renderings of a MatrixTable shared by the CLI and the GUI (CSV and JSON; richer formats arrive in M4)."""
+"""Text renderings of a MatrixTable shared by the CLI and the GUI (CSV and JSON; the other formats render the same table)."""
 
 import csv
 import io

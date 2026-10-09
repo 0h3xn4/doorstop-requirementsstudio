@@ -3,6 +3,7 @@
 import re
 from collections.abc import Collection
 from dataclasses import dataclass
+from pathlib import Path
 
 # An all-caps token (digits and '&' allowed inside, e.g. TT&C, S2), not part of a longer word,
 # and not an item ID such as EPS-0001 (a prefix followed by '-' and digits).
@@ -27,3 +28,21 @@ def find_acronyms(
             continue
         hits.append(AcronymHit(token, m.start(), m.end(), token in known))
     return hits
+
+
+def save_glossary(root: Path, terms: list[tuple[str, str]], acronyms: dict[str, str]) -> None:
+    """Write ``config/glossary.yaml`` (sorted, so the file diffs cleanly)."""
+    import yaml
+
+    from rvs_core.schema.versioning import CURRENT_VERSION
+
+    data = {
+        "rvs_schema_version": CURRENT_VERSION,
+        "terms": [{"term": t, "definition": d} for t, d in sorted(terms)],
+        "acronyms": [{"acronym": a, "expansion": e} for a, e in sorted(acronyms.items())],
+    }
+    folder = Path(root) / "config"
+    folder.mkdir(exist_ok=True)
+    (folder / "glossary.yaml").write_text(
+        yaml.safe_dump(data, sort_keys=True, allow_unicode=True), encoding="utf-8", newline="\n"
+    )

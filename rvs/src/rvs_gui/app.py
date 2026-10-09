@@ -1,11 +1,20 @@
 """Application bootstrap and main window."""
 
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
-from PySide6.QtCore import QItemSelectionModel, QPoint, Qt, Signal
-from PySide6.QtGui import QAction, QKeySequence
+from PySide6.QtCore import (
+    QAbstractItemModel,
+    QByteArray,
+    QItemSelectionModel,
+    QModelIndex,
+    QPersistentModelIndex,
+    QPoint,
+    Qt,
+    Signal,
+)
+from PySide6.QtGui import QAction, QActionGroup, QCloseEvent
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -14,11 +23,14 @@ from PySide6.QtWidgets import (
     QDockWidget,
     QFileDialog,
     QHBoxLayout,
+    QInputDialog,
+    QLabel,
     QLineEdit,
     QMainWindow,
     QMenu,
     QMessageBox,
     QSplitter,
+    QStyledItemDelegate,
     QTableView,
     QTabWidget,
     QVBoxLayout,
@@ -26,9 +38,13 @@ from PySide6.QtWidgets import (
 )
 
 import rvs_core
+from rvs_core import userconfig
+from rvs_core.adapter import ItemData, ProjectError
+from rvs_core.authoring import ReasonRequiredError
 from rvs_core.exporters.export_request import ExportRequest, build_output
 from rvs_core.exporters.itemsio import ImportReport, apply_import, read_csv, read_xlsx
 from rvs_core.matrices import Provenance
+from rvs_core.validate import ValidationReport
 from rvs_gui.baseline_dialog import NewBaselineDialog  # noqa: F401
 from rvs_gui.baselines_view import BaselinesView
 from rvs_gui.changes_view import ChangesView
@@ -37,19 +53,50 @@ from rvs_gui.diff_view import DiffView
 from rvs_gui.doctree import DocumentTree
 from rvs_gui.editor import RequirementEditor
 from rvs_gui.export_dialog import ExportDialog
+from rvs_gui.glossary_dialog import GlossaryDialog
 from rvs_gui.graph_view import GraphView
+from rvs_gui.help_viewer import HelpViewer
 from rvs_gui.impact_panel import ImpactPanel
 from rvs_gui.import_dialog import ImportDialog
 from rvs_gui.jobs import run_in_background
 from rvs_gui.matrix_views import CoverageView, TraceabilityView, VcmView
 from rvs_gui.models import COLUMNS, ItemFilterProxy, ItemTableModel
 from rvs_gui.problems import ProblemsPanel
+from rvs_gui.project_dialogs import NewProjectDialog
 from rvs_gui.session import ProjectSession
+from rvs_gui.shortcuts import SHORTCUTS, ShortcutsDialog, key_for
 from rvs_gui.theme import load_fonts, stylesheet
 from rvs_gui.widgets import InlineNotification
+from rvs_gui.wizard import NewRequirementWizard, RequirementSpec
 
 TITLE = "Requirements & Verification Studio"
 NEW_STATEMENT = "The system shall <describe the required behaviour>."
+MODES = ("guided", "expert")
+ROW_HEIGHT = {"guided": 30, "expert": 22}
+ENUM_KEYS = ("type", "status", "priority", "verify_method", "verify_level")
+
+
+class EnumDelegate(QStyledItemDelegate):
+    """Combo box limited to the project vocabulary of the cell's attribute."""
+
+    def __init__(self, choices: Callable[[QModelIndex], list[str]], parent: QWidget) -> None:
+        super().__init__(parent)
+        self._choices = choices
+
+    def createEditor(self, parent: QWidget, option: object, index: QModelIndex) -> QWidget:  # type: ignore[override]
+        combo = QComboBox(parent)
+        combo.addItems(self._choices(index))
+        return combo
+
+    def setEditorData(self, editor: QWidget, index: QModelIndex | QPersistentModelIndex) -> None:
+        if isinstance(editor, QComboBox):
+            editor.setCurrentIndex(max(0, editor.findText(str(index.data(Qt.ItemDataRole.EditRole)))))
+
+    def setModelData(
+        self, editor: QWidget, model: QAbstractItemModel, index: QModelIndex | QPersistentModelIndex
+    ) -> None:
+        if isinstance(editor, QComboBox):
+            model.setData(index, editor.currentText(), Qt.ItemDataRole.EditRole)
 
 
 class FilterBar(QWidget):
@@ -77,6 +124,7 @@ class FilterBar(QWidget):
 
 class MainWindow(QMainWindow):
     export_done = Signal(str, str)  # (path, error message or '')
+    project_opened = Signal(bool)  # an asynchronous open finished (True = the project is now open)
 
     def __init__(self, user: str | None = None) -> None:
         super().__init__()
@@ -112,6 +160,10 @@ class MainWindow(QMainWindow):
         self.diff_view = DiffView(self.session)
         self.graph_view.on_node_clicked = self.select_item
         self._syncing = False
+        self._opening = False
+        self._help: HelpViewer | None = None
+        self.mode = "guided"
+        self.actions_by_id: dict[str, QAction] = {}
 
         left = QWidget()
         left_lay = QVBoxLayout(left)
@@ -144,54 +196,84 @@ class MainWindow(QMainWindow):
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, tree_dock)
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.problems_panel)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.impact_panel)
+        self.mode_label = QLabel()
+        self.statusBar().addPermanentWidget(self.mode_label)
         self._build_menus(tree_dock)
         self._connect()
+        self._setup_inline_editing()
         self.statusBar().showMessage("")
+        self.set_mode(userconfig.load()["mode"], remember=False)
+        self._restore_geometry()
 
     # menus ####################################################################
+    def _action(self, action_id: str, text: str, slot: Callable[[], object], menu: QMenu | None = None) -> QAction:
+        act = QAction(text, self)
+        act.setShortcut(key_for(action_id))
+        act.triggered.connect(lambda _checked=False: slot())
+        act.setToolTip(SHORTCUTS[action_id][1])
+        self.addAction(act)  # also active when the action is in no menu (tab switching)
+        self.actions_by_id[action_id] = act
+        if menu is not None:
+            menu.addAction(act)
+        return act
+
+    def _tab_slot(self, index: int) -> Callable[[], None]:
+        return lambda: self.tabs.setCurrentIndex(index)
+
     def _build_menus(self, tree_dock: QDockWidget) -> None:
         bar = self.menuBar()
         file_menu = bar.addMenu("File")
-        self.action_open = QAction("Open Project…", self)
-        self.action_open.setShortcut(QKeySequence.StandardKey.Open)
-        self.action_open.triggered.connect(self.choose_project)
-        self.action_import = QAction("Import Items…", self)
-        self.action_import.setShortcut("Ctrl+I")
-        self.action_import.triggered.connect(self.import_items_dialog)
-        self.action_export = QAction("Export…", self)
-        self.action_export.setShortcut("Ctrl+E")
-        self.action_export.triggered.connect(self.export_dialog)
-        quit_action = QAction("Quit", self)
-        quit_action.setShortcut(QKeySequence.StandardKey.Quit)
-        quit_action.triggered.connect(self.close)
-        file_menu.addActions([self.action_open, self.action_import, self.action_export, quit_action])
+        self.action_open = self._action("open_project", "Open Project…", self.choose_project, file_menu)
+        self.action_new_project = self._action("new_project", "New Project…", self.new_project_dialog, file_menu)
+        self.recent_menu = file_menu.addMenu("Open Recent")
+        self.examples_menu = file_menu.addMenu("Open Example")
+        for key, title in (("minimal", "Minimal (10 items)"), ("satellite", "Small satellite (about 300 items)")):
+            act = QAction(title, self)
+            act.triggered.connect(lambda _c=False, k=key: self.open_example_dialog(k))
+            self.examples_menu.addAction(act)
+        file_menu.addSeparator()
+        self.action_import = self._action("import_items", "Import Items…", self.import_items_dialog, file_menu)
+        self.action_export = self._action("export", "Export…", self.export_dialog, file_menu)
+        file_menu.addSeparator()
+        self._action("quit", "Quit", self.close, file_menu)
 
         item_menu = bar.addMenu("Item")
-        self.action_new = QAction("New Requirement…", self)
-        self.action_new.setShortcut(QKeySequence.StandardKey.New)
-        self.action_new.triggered.connect(self.new_requirement_dialog)
-        self.action_save = QAction("Save", self)
-        self.action_save.setShortcut(QKeySequence.StandardKey.Save)
-        self.action_save.triggered.connect(lambda: self.editor.save())
-        self.action_revert = QAction("Revert", self)
-        self.action_revert.triggered.connect(self.editor.revert)
-        self.action_new_ver = QAction("New Verification Item…", self)
-        self.action_new_ver.triggered.connect(self.new_verification_dialog)
-        item_menu.addActions([self.action_new, self.action_new_ver, self.action_save, self.action_revert])
+        self.action_new = self._action("new_requirement", "New Requirement…", self.new_requirement_dialog, item_menu)
+        self.action_new_ver = self._action(
+            "new_verification", "New Verification Item…", self.new_verification_dialog, item_menu
+        )
+        self.action_save = self._action("save", "Save", lambda: self.editor.save(), item_menu)
+        self.action_revert = self._action("revert", "Revert", self.editor.revert, item_menu)
+        item_menu.addSeparator()
+        self._action("find", "Search Items", self.focus_search, item_menu)
+        self._action("go_to", "Go to Item…", self.go_to_dialog, item_menu)
+        self._action("next_problem", "Next Problem", self.next_problem, item_menu)
+        self._action("prev_problem", "Previous Problem", self.previous_problem, item_menu)
+        self._action("focus_problems", "Problems Panel", self.focus_problems, item_menu)
 
         project_menu = bar.addMenu("Project")
-        self.action_refresh = QAction("Refresh", self)
-        self.action_refresh.setShortcut(QKeySequence.StandardKey.Refresh)
-        self.action_refresh.triggered.connect(self.session.refresh)
-        self.action_full = QAction("Run Full Doorstop Validation", self)
-        self.action_full.triggered.connect(self.run_full_validation)
-        project_menu.addActions([self.action_refresh, self.action_full])
+        self.action_refresh = self._action("refresh", "Refresh", self.session.refresh, project_menu)
+        self.action_full = self._action(
+            "full_validation", "Run Full Doorstop Validation", self.run_full_validation, project_menu
+        )
         project_menu.addSeparator()
-        self.action_baseline = QAction("New Baseline…", self)
-        self.action_baseline.triggered.connect(self.baselines_view.new_baseline_dialog)
-        project_menu.addAction(self.action_baseline)
+        self.action_baseline = self._action(
+            "new_baseline", "New Baseline…", self.baselines_view.new_baseline_dialog, project_menu
+        )
+        self.action_glossary = self._action("glossary", "Glossary and Acronyms…", self.glossary_dialog, project_menu)
 
         view_menu = bar.addMenu("View")
+        mode_menu = view_menu.addMenu("Mode")
+        group = QActionGroup(self)
+        group.setExclusive(True)
+        self.action_mode_guided = QAction("Guided: wizard, help under every field", self, checkable=True)
+        self.action_mode_expert = QAction("Expert: dense table, edit in place", self, checkable=True)
+        for mode, act in (("guided", self.action_mode_guided), ("expert", self.action_mode_expert)):
+            act.triggered.connect(lambda _c=False, m=mode: self.set_mode(m))
+            group.addAction(act)
+            mode_menu.addAction(act)
+        self._action("toggle_mode", "Switch Mode", self.toggle_mode, mode_menu)
+        view_menu.addSeparator()
         view_menu.addAction(tree_dock.toggleViewAction())
         view_menu.addAction(self.problems_panel.toggleViewAction())
         view_menu.addAction(self.impact_panel.toggleViewAction())
@@ -203,11 +285,20 @@ class MainWindow(QMainWindow):
             act.toggled.connect(lambda on, key=col.key: self.set_column_visible(key, on))
             self.columns_menu.addAction(act)
             self.column_actions[col.key] = act
+        tabs_menu = view_menu.addMenu("Tabs")
+        for n in range(1, self.tabs.count() + 1):
+            self._action(f"tab_{n}", self.tabs.tabText(n - 1), self._tab_slot(n - 1), tabs_menu)
+        for n in range(self.tabs.count() + 1, 9):  # shortcuts for tabs that do not exist are still bound, harmlessly
+            self._action(f"tab_{n}", f"Tab {n}", lambda: None)
 
+        help_menu = bar.addMenu("Help")
+        self._action("help", "User Guide", lambda: self.show_help(), help_menu)
+        self._action("shortcuts_help", "Keyboard Shortcuts", self.show_shortcuts, help_menu)
         about = QAction("About", self)
         about.triggered.connect(lambda: QMessageBox.about(self, TITLE, self.about_text()))
-        bar.addMenu("Help").addAction(about)
+        help_menu.addAction(about)
         self._apply_column_visibility()
+        self._refresh_recent()
 
     def _connect(self) -> None:
         self.session.loaded.connect(self._on_loaded)
@@ -273,7 +364,35 @@ class MainWindow(QMainWindow):
         if self.editor.is_dirty():
             self.notification.show_message("warning", "Save or revert your changes before opening another project.")
             return False
-        report = self.session.open(Path(path))
+        return self._finish_open(Path(path), ProjectSession.open_report(Path(path)))
+
+    def open_project_async(self, path: Path) -> None:
+        """Open ``path`` without freezing the window (large projects take seconds); ``project_opened`` reports the result."""
+        path = Path(path)
+        if self.editor.is_dirty():
+            self.notification.show_message("warning", "Save or revert your changes before opening another project.")
+            self.project_opened.emit(False)
+            return
+        if self._opening:
+            self.notification.show_message("info", "A project is already being opened. Please wait.")
+            self.project_opened.emit(False)
+            return
+        self._opening = True
+        self.notification.show_message("info", f"Opening {path} …")
+
+        def done(report: object) -> None:
+            self._opening = False
+            self.project_opened.emit(self._finish_open(path, report))  # type: ignore[arg-type]
+
+        def failed(exc: Exception) -> None:
+            self._opening = False
+            self.notification.show_message("error", f"The project could not be opened: {exc}")
+            self.project_opened.emit(False)
+
+        run_in_background(lambda: ProjectSession.open_report(path), done, failed)
+
+    def _finish_open(self, path: Path, report: ValidationReport) -> bool:
+        self.session.adopt(path, report)
         if report.exit_code == 3 or self.session.cfg is None:
             lines = " ".join(f"{f.message} {f.hint}".strip() for f in report.findings if f.severity.value == "error")
             self.notification.show_message("error", f"The project could not be opened. {lines}")
@@ -285,7 +404,67 @@ class MainWindow(QMainWindow):
             self.notification.show_message(
                 "warning", f"Opened with {errors} error(s). Double-click a problem in the Problems panel to jump to it."
             )
+        userconfig.add_recent(path)
+        self._refresh_recent()
         return True
+
+    def _refresh_recent(self) -> None:
+        self.recent_menu.clear()
+        recent = userconfig.recent_projects()
+        for path in recent:
+            act = QAction(str(path), self)
+            act.triggered.connect(lambda _c=False, p=path: self.open_project(p))
+            self.recent_menu.addAction(act)
+        self.recent_menu.setEnabled(bool(recent))
+
+    def new_project_dialog(self) -> None:
+        dlg = NewProjectDialog(self)
+        if dlg.exec():
+            self.create_project(*dlg.values())
+
+    def create_project(self, folder: Path, name: str, template: str, git: bool) -> bool:
+        from rvs_core.project_templates import create_from_template
+
+        if self.editor.is_dirty():
+            self.notification.show_message("warning", "Save or revert your changes before creating a project.")
+            return False
+        if not str(folder).strip() or str(folder) == ".":
+            self.notification.show_message("error", "Choose a folder for the new project.")
+            return False
+        try:
+            create_from_template(Path(folder), name, template, git=git)
+        except (ValueError, OSError) as exc:
+            self.notification.show_message("error", str(exc))
+            return False
+        return self.open_project(Path(folder))
+
+    def open_example_dialog(self, key: str) -> None:
+        chosen = QFileDialog.getExistingDirectory(self, "Where should the example project be created?")
+        if chosen:
+            self.open_example(key, Path(chosen) / f"rvs-example-{key}")
+
+    def open_example(self, key: str, target: Path) -> bool:
+        """Generate an example project (fictional data) at ``target`` and open it."""
+        from rvs_core.examples.minimal import build_minimal_project
+        from rvs_core.examples.satellite import build_satellite_project
+
+        builders = {"minimal": build_minimal_project, "satellite": build_satellite_project}
+        if key not in builders:
+            self.notification.show_message("error", f"There is no example called '{key}'. Choose minimal or satellite.")
+            return False
+        target = Path(target)
+        if target.exists() and any(target.iterdir()):
+            self.notification.show_message("error", f"{target} already exists and is not empty. Choose another folder.")
+            return False
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            builders[key](target)
+        except OSError as exc:
+            self.notification.show_message("error", f"The example could not be created in {target}: {exc.strerror}.")
+            return False
+        finally:
+            QApplication.restoreOverrideCursor()
+        return self.open_project(target)
 
     def _status_text(self) -> str:
         s = self.session
@@ -480,15 +659,216 @@ class MainWindow(QMainWindow):
         self._show_selection(uid)
         return True
 
+    # modes ####################################################################
+    def set_mode(self, mode: str, remember: bool = True) -> None:
+        """Guided: wizard, help under each field, roomy read-only table. Expert: dense table, edit in place."""
+        if mode not in MODES:
+            raise ValueError(f"Unknown mode '{mode}'. Use guided or expert.")
+        self.mode = mode
+        expert = mode == "expert"
+        self.action_mode_guided.setChecked(not expert)
+        self.action_mode_expert.setChecked(expert)
+        self.editor.set_help_visible(not expert)
+        self.table.verticalHeader().setDefaultSectionSize(ROW_HEIGHT[mode])
+        self.table_model.set_editing(expert)
+        triggers = (
+            QAbstractItemView.EditTrigger.DoubleClicked | QAbstractItemView.EditTrigger.EditKeyPressed
+            if expert
+            else QAbstractItemView.EditTrigger.NoEditTriggers
+        )
+        self.table.setEditTriggers(triggers)
+        self.mode_label.setText("Expert mode" if expert else "Guided mode")
+        if remember:
+            userconfig.update(mode=mode)
+
+    def toggle_mode(self) -> None:
+        self.set_mode("guided" if self.mode == "expert" else "expert")
+
+    # inline editing (expert mode) ##############################################
+    def _setup_inline_editing(self) -> None:
+        self.table_model.edit_handler = self.inline_edit
+        self.table_model.can_edit = self._can_edit_cell
+        for key in ENUM_KEYS:
+            col = [c.key for c in COLUMNS].index(key)
+            self.table.setItemDelegateForColumn(col, EnumDelegate(self._choices_for, self.table))
+
+    def _can_edit_cell(self, item: ItemData, key: str) -> bool:
+        cfg = self.session.cfg
+        decl = cfg.project.document(item.document) if cfg else None
+        return decl is not None and cfg is not None and key in cfg.attribute_defs(decl.kind)
+
+    def _choices_for(self, index: QModelIndex) -> list[str]:
+        cfg = self.session.cfg
+        assert cfg is not None
+        source = self.table_proxy.mapToSource(index) if index.model() is self.table_proxy else index
+        item = self.table_model.item_at(source.row())
+        key = COLUMNS[source.column()].key
+        decl = cfg.project.document(item.document)
+        adef = cfg.attribute_defs(decl.kind if decl else "requirements").get(key)
+        if adef is None or not adef.vocab:
+            return []
+        values = list(cfg.vocab.values(adef.vocab))
+        return values if adef.required else ["", *values]
+
+    def ask_reason(self, uid: str) -> str:
+        text, ok = QInputDialog.getText(
+            self, "Reason for change", f"{uid} is baselined, so every change needs a reason. Why are you changing it?"
+        )
+        return text.strip() if ok else ""
+
+    def inline_edit(self, uid: str, key: str, value: str) -> bool:
+        """Apply one cell edit from the table. Returns False (with a message) when the edit is refused."""
+        if self.editor.is_dirty() and self.editor.current_uid == uid:
+            self.notification.show_message(
+                "warning", f"Save or revert your changes to {uid} before editing it in the table."
+            )
+            return False
+        why = ""
+        for _attempt in range(2):
+            try:
+                self.session.update_item(uid, attrs={key: value}, why=why)
+            except ReasonRequiredError as exc:
+                why = self.ask_reason(uid)
+                if not why.strip():
+                    self.notification.show_message("error", f"{exc} The change was not made: a reason is required.")
+                    return False
+            except (ValueError, ProjectError) as exc:
+                self.notification.show_message("error", str(exc))
+                return False
+            else:
+                return True
+        return False
+
+    # navigation ################################################################
+    def focus_search(self) -> None:
+        self.tabs.setCurrentIndex(0)
+        self.filter_bar.search.setFocus()
+        self.filter_bar.search.selectAll()
+
+    def go_to_dialog(self) -> None:
+        text, ok = QInputDialog.getText(self, "Go to item", "Item ID (for example SYS-0012):")
+        if ok and text.strip():
+            self.go_to(text)
+
+    def go_to(self, text: str) -> bool:
+        uid = text.strip().upper()
+        if self.session.item(uid) is None:
+            self.notification.show_message("warning", f"There is no item {uid or text!r} in this project.")
+            return False
+        self.tabs.setCurrentIndex(0)
+        return self.select_item(uid)
+
+    def problem_uids(self) -> list[str]:
+        return [
+            i.uid
+            for i in self.session.items
+            if any(f.severity.value in ("error", "warning") for f in self.session.findings_for(i.uid))
+        ]
+
+    def _step_problem(self, step: int) -> str | None:
+        uids = self.problem_uids()
+        if not uids:
+            self.notification.show_message("success", "No problems to go to.")
+            return None
+        current = self.editor.current_uid
+        if current in uids:
+            target = uids[(uids.index(current) + step) % len(uids)]
+        else:
+            later = [u for u in self.session.items if u.uid == current]
+            target = uids[0] if step > 0 or not later else uids[-1]
+        self.tabs.setCurrentIndex(0)
+        return target if self.select_item(target) else None
+
+    def next_problem(self) -> str | None:
+        return self._step_problem(1)
+
+    def previous_problem(self) -> str | None:
+        return self._step_problem(-1)
+
+    def focus_problems(self) -> None:
+        self.problems_panel.show()
+        self.problems_panel.raise_()
+        self.problems_panel.setFocus()
+
+    # dialogs ###################################################################
+    def glossary_dialog(self) -> None:
+        if self.session.cfg is None:
+            self.notification.show_message("info", "Open a project first.")
+            return
+        GlossaryDialog(self.session, self).exec()
+
+    def show_shortcuts(self) -> None:
+        ShortcutsDialog(self).exec()
+
+    def show_help(self, anchor: str = "") -> HelpViewer:
+        if self._help is None:
+            self._help = HelpViewer()
+        self._help.show_section(anchor)
+        self._help.show()
+        self._help.raise_()
+        return self._help
+
+    def _restore_geometry(self) -> None:
+        raw = userconfig.load()["geometry"]
+        if raw:
+            self.restoreGeometry(QByteArray.fromBase64(raw.encode("ascii")))
+
+    def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 - Qt API
+        userconfig.update(geometry=bytes(self.saveGeometry().toBase64().data()).decode("ascii"))
+        super().closeEvent(event)
+
     # creating #################################################################
     def new_requirement_dialog(self) -> None:
         if self.session.cfg is None:
             self.notification.show_message("info", "Open a project first.")
             return
-        dlg = NewItemDialog(self.session, self)
+        current = self.session.item(self.editor.current_uid or "")
+        document = current.document if current and self.session.kind_of(current.document) == "requirements" else None
+        if self.mode == "guided":
+            wizard = NewRequirementWizard(self.session, self, document=document)
+            if wizard.exec():
+                self.create_from_spec(wizard.spec())
+            return
+        dlg = NewItemDialog(self.session, self, document=document)
         if dlg.exec():
             prefix, title, parents = dlg.values()
             self.create_item(prefix, title, parents)
+
+    def create_from_spec(self, spec: RequirementSpec) -> str | None:
+        """Create the requirement collected by the wizard and, if asked, its planned verification item."""
+        if self.editor.is_dirty():
+            self.notification.show_message("warning", "Save or revert your changes before creating a new item.")
+            return None
+        try:
+            item = self.session.create_item(spec.document, spec.text, attrs=spec.attrs, parents=spec.parents)
+        except Exception as exc:  # noqa: BLE001 - friendly message, never a traceback
+            self.notification.show_message("error", str(exc))
+            return None
+        extra = ""
+        if spec.verification is not None:
+            try:
+                vocab = self.session.cfg.vocab  # type: ignore[union-attr]
+                ver = self.session.create_item(
+                    spec.verification.document,
+                    f"Verify {item.uid}.",
+                    attrs={
+                        "title": f"Verify {item.uid}",
+                        "verify_method": spec.attrs.get("verify_method") or vocab.values("verify_method")[0],
+                        "verify_level": spec.attrs.get("verify_level") or vocab.values("verify_level")[0],
+                        "link_verifies": [item.uid],
+                    },
+                    derived=True,
+                )
+                extra = f" and the planned verification item {ver.uid}"
+            except Exception as exc:  # noqa: BLE001
+                self.select_item(item.uid)
+                self.notification.show_message(
+                    "warning", f"Created {item.uid}, but its verification item could not be created: {exc}"
+                )
+                return item.uid
+        self.select_item(item.uid)
+        self.notification.show_message("success", f"Created {item.uid}{extra}.")
+        return item.uid
 
     def new_verification_dialog(self) -> None:
         if self.session.cfg is None:
@@ -556,6 +936,9 @@ def create_main_window() -> MainWindow:
 
 
 def main() -> int:
+    from rvs_gui.crash import install_excepthook
+
+    install_excepthook()
     app = create_app(sys.argv)
     win = create_main_window()
     win.show()

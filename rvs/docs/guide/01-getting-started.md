@@ -64,7 +64,7 @@ On Linux, unpack the release and run `./install.sh` (it installs for your user o
 
 ### Checking an installation
 
-`rvs selftest` checks the installed program: bundled fonts and configuration, a sample project, an export in every format, a baseline in a scratch Git repository, and that the offline guard is active. It prints one line per check and exits with 0 when everything is fine. `rvs selftest --manifest <folder>` also verifies every installed file against `MANIFEST.sha256`, which shows whether files were damaged or altered after installation.
+`rvs selftest` checks the installed program: bundled fonts and configuration, a sample project, an export in every format (ReqIF included), a baseline in a scratch Git repository, and that the offline guard is active. It prints one line per check and exits with 0 when everything is fine. `rvs selftest --manifest <folder>` also verifies every installed file against `MANIFEST.sha256`, which shows whether files were damaged or altered after installation.
 
 ### Where RVS keeps its own settings
 

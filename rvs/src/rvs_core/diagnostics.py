@@ -122,6 +122,30 @@ def selftest() -> list[CheckResult]:
 
         return run
 
+    def reqif() -> str:
+        from rvs_core.exporters.itemsio import plan_import
+        from rvs_core.exporters.reqif import export_reqif, read_reqif
+        from rvs_core.matrices import Provenance
+
+        report = state["report"]
+        cfg, _ = load_project_config(state["root"])  # type: ignore[arg-type]
+        prov = Provenance("selftest", "-", "selftest", "-", dt(2026, 1, 1), "selftest")
+        data = export_reqif(cfg, report.items, prov)  # type: ignore[attr-defined]
+        rows = read_reqif(data, cfg, report.items).rows  # type: ignore[attr-defined]
+        plan = plan_import(cfg, report.items, rows)  # type: ignore[attr-defined]
+        if plan.errors or {r.action for r in plan.results} != {"unchanged"}:
+            raise RuntimeError("an exported ReqIF file does not read back unchanged")
+        return f"{len(data)} bytes, reads back unchanged"
+
+    def yaml_parser() -> str:
+        import doorstop.common as doorstop_common
+        import yaml
+
+        fast = getattr(yaml, "CSafeLoader", None) is not None and doorstop_common.load_yaml.__defaults__ == (
+            yaml.CSafeLoader,
+        )
+        return "libyaml (fast)" if fast else "pure Python (slower on large projects)"
+
     def baseline() -> str:
         from rvs_core.changecontrol.baselines import create_baseline, verify_baseline
 
@@ -151,6 +175,8 @@ def selftest() -> list[CheckResult]:
             results.append(_check("DOCX export", render("docx")))
             results.append(_check("PDF export", render("pdf")))
             results.append(_check("HTML export", render("html")))
+            results.append(_check("ReqIF export and import", reqif))
+            results.append(_check("YAML parser", yaml_parser))
             results.append(_check("baseline (Git)", baseline))
         results.append(_check("offline guard", guard))
     finally:

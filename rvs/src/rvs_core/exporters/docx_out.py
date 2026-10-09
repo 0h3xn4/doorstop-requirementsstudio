@@ -11,7 +11,7 @@ from docx.shared import Cm, Pt, RGBColor
 from docx.text.paragraph import Paragraph as DocxParagraph
 
 from rvs_core.exporters.mdlite import Bullets, Spans, parse
-from rvs_core.exporters.model import Doc, Entry, Heading, Paragraph, TableBlock
+from rvs_core.exporters.model import DiffEntry, Doc, Entry, Heading, Paragraph, TableBlock
 from rvs_core.exporters.zipnorm import normalize_zip
 
 SANS, MONO = "IBM Plex Sans", "IBM Plex Mono"
@@ -140,6 +140,21 @@ def render_docx(doc: Doc) -> bytes:
             _markdown(d, block.text)
         elif isinstance(block, TableBlock):
             _table(d, block)
+        elif isinstance(block, DiffEntry):
+            d.add_heading(
+                f"{block.uid} — {block.title} ({block.kind})" if block.title else f"{block.uid} ({block.kind})", level=3
+            )
+            for field in block.fields:
+                p = d.add_paragraph()
+                p.add_run(f"{field.name}: ").bold = True
+                for op, text in field.segments:
+                    run = p.add_run(text)
+                    if op == "insert":
+                        run.font.color.rgb = RGBColor(0x19, 0x80, 0x38)
+                        run.underline = True
+                    elif op == "delete":
+                        run.font.color.rgb = RGBColor(0xDA, 0x1E, 0x28)
+                        run.font.strike = True
         elif isinstance(block, Entry):
             d.add_heading(f"{block.uid} — {block.title}" if block.title else block.uid, level=3)
             _markdown(d, block.text)

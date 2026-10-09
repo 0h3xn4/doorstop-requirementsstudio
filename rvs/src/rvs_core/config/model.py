@@ -122,6 +122,15 @@ class LinkTypeDef:
 
 
 @dataclass(frozen=True)
+class ChangeConfig:
+    statuses: tuple[str, ...]
+    open_statuses: tuple[str, ...]
+    deferred_status: str
+    digits: int
+    promote: Mapping[str, str]
+
+
+@dataclass(frozen=True)
 class ProjectConfig:
     project: ProjectFile
     numbering: Numbering
@@ -132,6 +141,7 @@ class ProjectConfig:
     standards: Standards
     glossary: Glossary
     links: Mapping[str, LinkTypeDef]
+    changes: ChangeConfig
 
     def attribute_defs(self, kind: str) -> dict[str, AttributeDef]:
         defs = {a.name: a for a in self.templates.kinds[kind].attributes}

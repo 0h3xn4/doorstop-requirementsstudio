@@ -12,6 +12,8 @@ from pathlib import Path
 from typing import Any
 
 from rvs_core.adapter import DoorstopProject, ItemData
+from rvs_core.changecontrol.changes import ChangeRequestError, ChangeRequestStore
+from rvs_core.changecontrol.manifests import baselined_uids
 from rvs_core.config import load_project_config
 
 HISTORY_DIR = "history"
@@ -41,10 +43,21 @@ def _os_user() -> str:
 
 
 class EditService:
-    def __init__(self, root: Path, user: str | None = None) -> None:
+    def __init__(self, root: Path, user: str | None = None, change_request: str | None = None) -> None:
         self.root = Path(root)
         self.user = user or _os_user()
         self._cfg, _ = load_project_config(self.root)
+        self._baselined: set[str] | None = None
+        self.change_request = change_request
+        if change_request:
+            try:
+                cr = ChangeRequestStore(self.root, self._cfg).get(change_request)
+            except ChangeRequestError as exc:
+                raise ValueError(str(exc)) from exc
+            if cr.status not in self._cfg.changes.open_statuses:
+                raise ValueError(
+                    f"{change_request} is {cr.status}, so edits cannot be attributed to it. Choose an open change request."
+                )
 
     # helpers ################################################################
     def record(self, uid: str, action: str, fields: Sequence[str], why: str) -> None:
@@ -57,6 +70,8 @@ class EditService:
             "why": why.strip(),
             "fields": sorted(fields),
         }
+        if self.change_request:
+            entry["cr"] = self.change_request
         with path.open("a", encoding="utf-8", newline="\n") as fh:
             fh.write(json.dumps(entry, sort_keys=True, ensure_ascii=False) + "\n")
 
@@ -74,10 +89,18 @@ class EditService:
                 )
 
     def require_reason(self, item: ItemData, why: str) -> None:
+        if why.strip():
+            return
         statuses = self._cfg.rules.get("change_control", {}).get("reason_required_statuses", [])
-        if item.attrs.get("status") in statuses and not why.strip():
+        if self._baselined is None:
+            self._baselined = baselined_uids(self.root)
+        if item.attrs.get("status") in statuses:
             raise ReasonRequiredError(
                 f"{item.uid} is {item.attrs.get('status')}; every change needs a reason. Enter why you are changing it."
+            )
+        if item.uid in self._baselined:
+            raise ReasonRequiredError(
+                f"{item.uid} is part of a baseline; every change needs a reason. Enter why you are changing it."
             )
 
     # operations #############################################################

@@ -1,0 +1,10 @@
+# Change requests and baselines. The status names below are a starting point (TODO-COMPANY): adapt them to your
+# configuration management process (ECSS-M-ST-40C wording is not applied until the standard text is supplied).
+rvs_schema_version: 1
+statuses: [open, in-review, approved, implemented, closed, rejected, deferred]
+# A baseline cannot be created while a change request has one of these statuses, unless it is explicitly deferred.
+open_statuses: [open, in-review, approved]
+deferred_status: deferred
+digits: 4
+# Items with these statuses are moved to the target status when a baseline is created (approved -> baselined).
+promote_on_baseline: {approved: baselined}

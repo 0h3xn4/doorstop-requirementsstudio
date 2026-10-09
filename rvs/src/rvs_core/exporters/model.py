@@ -34,7 +34,23 @@ class Entry:
     rationale: str = ""
 
 
-Block = Heading | Paragraph | TableBlock | Entry
+@dataclass(frozen=True)
+class DiffField:
+    name: str
+    segments: tuple[tuple[str, str], ...]  # (op, text): equal | insert | delete
+
+
+@dataclass(frozen=True)
+class DiffEntry:
+    """An added, removed or changed item in a change report."""
+
+    uid: str
+    title: str
+    kind: str
+    fields: tuple[DiffField, ...] = ()
+
+
+Block = Heading | Paragraph | TableBlock | Entry | DiffEntry
 
 
 @dataclass(frozen=True)

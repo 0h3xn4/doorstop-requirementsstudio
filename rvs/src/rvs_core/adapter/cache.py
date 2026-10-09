@@ -69,6 +69,9 @@ class ItemCache:
             ignore = self.dir / ".gitignore"
             if not ignore.exists():
                 ignore.write_text("*\n", encoding="utf-8", newline="\n")
+            skip = self.dir / ".doorstop.skip-all"  # Doorstop must not scan extracted baseline snapshots as documents
+            if not skip.exists():
+                skip.write_text("", encoding="utf-8")
             payload = {
                 "v": CACHE_VERSION,
                 "config": list(config),

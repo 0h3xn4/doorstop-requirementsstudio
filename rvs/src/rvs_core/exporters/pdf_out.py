@@ -14,7 +14,7 @@ from reportlab.platypus import KeepTogether, ListFlowable, ListItem, SimpleDocTe
 from reportlab.platypus import Paragraph as RLParagraph
 
 from rvs_core.exporters.mdlite import Bullets, Spans, parse
-from rvs_core.exporters.model import Doc, Entry, Heading, Paragraph, TableBlock
+from rvs_core.exporters.model import DiffEntry, Doc, Entry, Heading, Paragraph, TableBlock
 
 SANS, BOLD, ITALIC, MONO = "IBMPlexSans", "IBMPlexSans-SemiBold", "IBMPlexSans-Italic", "IBMPlexMono"
 _GAP_FILL = {"unverified-approved": "#FFD7D9", "orphan": "#FFD7D9", "unverified": "#FCF4D6", "childless": "#FCF4D6"}
@@ -107,6 +107,25 @@ def render_pdf(doc: Doc) -> bytes:
             story += markdown(block.text)
         elif isinstance(block, TableBlock):
             story.append(table(block))
+        elif isinstance(block, DiffEntry):
+            diff_parts = [
+                RLParagraph(
+                    _esc(
+                        f"{block.uid} — {block.title} ({block.kind})" if block.title else f"{block.uid} ({block.kind})"
+                    ),
+                    h[3],
+                )
+            ]
+            for field in block.fields:
+                marked = "".join(
+                    {
+                        "insert": f'<font color="#198038"><u>{_esc(t)}</u></font>',
+                        "delete": f'<font color="#da1e28"><strike>{_esc(t)}</strike></font>',
+                    }.get(op, _esc(t))
+                    for op, t in field.segments
+                )
+                diff_parts.append(RLParagraph(f"<b>{_esc(field.name)}:</b> {marked}", base))
+            story.append(KeepTogether(diff_parts))
         elif isinstance(block, Entry):
             head = f"{block.uid} — {block.title}" if block.title else block.uid
             parts: list[Any] = [RLParagraph(_esc(head), h[3]), *markdown(block.text)]

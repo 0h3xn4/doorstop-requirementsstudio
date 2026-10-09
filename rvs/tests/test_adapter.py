@@ -119,3 +119,28 @@ def test_item_and_document_hooks_are_called(tmp_path: Path):
         )
     )
     assert seen_items == ["SYS-0001"] and sorted(seen_docs) == ["EPS", "SYS"]
+
+
+def test_saving_in_a_git_project_never_runs_git(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Doorstop would call `git add` (a subprocess, working directory dependent) on every save."""
+    import subprocess
+
+    from rvs_core.vcs.git import GitRepo
+
+    root = tmp_path / "p"
+    GitRepo.init(root)
+    proj = _make(root)
+    calls: list[object] = []
+    real = subprocess.call
+
+    def spy(*a: object, **k: object) -> int:
+        calls.append(a)
+        return real(*a, **k)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(subprocess, "call", spy)
+    monkeypatch.setattr(subprocess, "check_output", lambda *a, **k: calls.append(a) or b"")
+    monkeypatch.setenv("PATH", "")  # no git executable at all
+    item = proj.add_item("SYS", "The system shall work.", attrs={"title": "T"})
+    proj.update_item(item.uid, attrs={"title": "T2"})
+    assert calls == []
+    assert not GitRepo.discover(root)._repo.open_index().__len__()  # nothing was staged behind our back

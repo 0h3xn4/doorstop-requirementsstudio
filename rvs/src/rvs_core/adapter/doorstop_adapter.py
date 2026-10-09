@@ -27,6 +27,9 @@ _settings.REORDER = False
 _settings.REFORMAT = False
 _settings.STAMP_NEW_LINKS = False
 _settings.REVIEW_NEW_ITEMS = False
+# Doorstop would otherwise run `git add/rm` through a subprocess on every save when the project is in a Git
+# repository: it needs a `git` executable, and it uses the process's working directory, not the project's repository.
+_settings.ADDREMOVE_FILES = False
 
 # Doorstop item fields that are not RVS extended attributes.
 _CORE_FIELDS = frozenset({"level", "active", "normative", "derived", "reviewed", "text", "ref", "links", "header"})

@@ -6,7 +6,7 @@ from functools import cache
 from importlib import resources
 
 from rvs_core.exporters.mdlite import Bullets, Spans, parse
-from rvs_core.exporters.model import Doc, Entry, Heading, Paragraph, TableBlock
+from rvs_core.exporters.model import DiffEntry, Doc, Entry, Heading, Paragraph, TableBlock
 
 _FONTS = (
     ("IBM Plex Sans", "normal", "400", "IBMPlexSans-Regular"),
@@ -39,6 +39,8 @@ th,td{padding:6px 8px;border-bottom:1px solid #e0e0e0;vertical-align:top}
 tr.gap-unverified td,tr.gap-childless td{background:#fcf4d6} tr.gap-orphan td,tr.gap-unverified-approved td{background:#ffd7d9}
 section.req{border-top:1px solid #e0e0e0;padding:10px 0} .fields{color:#525252;font-size:12px;margin:4px 0}
 .fields b{color:#161616;font-weight:600} code{font-family:"IBM Plex Mono",monospace;background:#f4f4f4;padding:0 3px}
+ins{background:#defbe6;color:#0e6027;text-decoration:none} del{background:#fff1f1;color:#a2191f}
+.kind{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#525252;margin-left:8px}
 @media print{body{padding:0}header.titleblock{page-break-after:avoid}section.req{page-break-inside:avoid}}
 """
 
@@ -84,6 +86,23 @@ def render_html(doc: Doc) -> bytes:
             body.append(_markdown(block.text))
         elif isinstance(block, TableBlock):
             body.append(_table(block))
+        elif isinstance(block, DiffEntry):
+            rows = "".join(
+                f'<p class="fields"><b>{html.escape(f.name)}:</b> '
+                + "".join(
+                    {"insert": f"<ins>{html.escape(t)}</ins>", "delete": f"<del>{html.escape(t)}</del>"}.get(
+                        op, html.escape(t)
+                    )
+                    for op, t in f.segments
+                )
+                + "</p>"
+                for f in block.fields
+            )
+            title = f" &mdash; {html.escape(block.title)}" if block.title else ""
+            body.append(
+                f'<section class="req" id="{html.escape(block.uid)}"><h3>{html.escape(block.uid)}{title}'
+                f'<span class="kind">{html.escape(block.kind)}</span></h3>{rows}</section>'
+            )
         elif isinstance(block, Entry):
             fields = " &middot; ".join(f"<b>{html.escape(k)}:</b> {html.escape(v)}" for k, v in block.fields)
             title = f" &mdash; {html.escape(block.title)}" if block.title else ""

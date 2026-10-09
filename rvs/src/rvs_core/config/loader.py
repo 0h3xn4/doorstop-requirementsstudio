@@ -8,6 +8,7 @@ import yaml
 
 from rvs_core.config.model import (
     AttributeDef,
+    ChangeConfig,
     DocumentDecl,
     Glossary,
     KindTemplate,
@@ -29,7 +30,7 @@ PROJECT_FILE = "rvs-project.yaml"
 RESERVED_ATTRIBUTES = frozenset(
     {"level", "active", "normative", "derived", "reviewed", "text", "ref", "references", "links", "header"}
 )
-CONFIG_NAMES = ("numbering", "vocab", "templates", "rules", "exports", "standards", "glossary", "links")
+CONFIG_NAMES = ("numbering", "vocab", "templates", "rules", "exports", "standards", "glossary", "links", "changes")
 
 
 def _parse(text: str, source: str) -> dict[str, Any]:
@@ -149,7 +150,22 @@ def load_project_config(root: Path) -> tuple[ProjectConfig, list[Finding]]:
             name: LinkTypeDef(name, t["attribute"], tuple(t["source"]), tuple(t["target"]), bool(t.get("symmetric")))
             for name, t in sorted(loaded["links"]["types"].items())
         },
+        ChangeConfig(
+            tuple(loaded["changes"]["statuses"]),
+            tuple(loaded["changes"]["open_statuses"]),
+            loaded["changes"]["deferred_status"],
+            int(loaded["changes"].get("digits", 4)),
+            dict(loaded["changes"].get("promote_on_baseline", {})),
+        ),
     )
+    ch = loaded["changes"]
+    unknown_statuses = (set(ch["open_statuses"]) | {ch["deferred_status"]}) - set(ch["statuses"])
+    if unknown_statuses:
+        raise ConfigError(
+            f"config/changes.yaml: {', '.join(sorted(unknown_statuses))} used in open_statuses/deferred_status "
+            "but not listed under statuses.",
+            location="config/changes.yaml",
+        )
     attr_names = [d.attribute for d in cfg.links.values()]
     if len(set(attr_names)) != len(attr_names):
         raise ConfigError("config/links.yaml: two link types use the same attribute.", location="config/links.yaml")

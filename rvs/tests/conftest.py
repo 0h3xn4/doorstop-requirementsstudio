@@ -15,3 +15,12 @@ def minimal_project(tmp_path: Path) -> Path:
     root = tmp_path / "minimal"
     build_minimal_project(root)
     return root
+
+
+@pytest.fixture
+def git_project(minimal_project: Path) -> Path:
+    """The minimal project inside its own Git repository (no commits yet)."""
+    from rvs_core.vcs.git import GitRepo
+
+    GitRepo.init(minimal_project)
+    return minimal_project

@@ -17,6 +17,7 @@ dependencies = [
     "reportlab==5.0.1",
     "openpyxl==3.1.5",
     "Markdown==3.11",
+    "dulwich==1.2.17",
 ]
 
 # Release and dev tooling NEVER goes in [project].dependencies (spec rule 8).

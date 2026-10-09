@@ -7,11 +7,15 @@ from pathlib import Path
 from typing import Any
 
 from rvs_core.adapter import DocumentInfo, DoorstopProject, ItemData, ProjectError
+from rvs_core.changecontrol.baselines import BaselineError, verify_baseline
+from rvs_core.changecontrol.changes import ChangeRequestError, ChangeRequestStore, validate_change_requests
+from rvs_core.changecontrol.manifests import manifest_names
 from rvs_core.config import ConfigError, ProjectConfig, load_project_config
 from rvs_core.findings import Finding, Severity, sort_findings
 from rvs_core.rules import build_context, run_rules
 from rvs_core.schema.versioning import VERSION_KEY, SchemaVersionError, migrate
 from rvs_core.trace import LinkGraph, validate_links
+from rvs_core.vcs.git import GitError
 
 FATAL_CODES = frozenset(
     {
@@ -321,6 +325,25 @@ def validate_project(root: Path, *, strict: bool = False, doorstop: bool = True)
     findings.extend(run_rules(build_context(cfg, items, docs)))
     graph = LinkGraph.build(cfg, items)
     findings.extend(validate_links(cfg, graph, items))
+    try:
+        findings.extend(validate_change_requests(cfg, ChangeRequestStore(root, cfg), {i.uid for i in items}))
+    except SchemaVersionError as exc:
+        return _fatal(exc.code, str(exc), "", "changes")
+    except (ChangeRequestError, OSError, ValueError) as exc:
+        findings.append(
+            Finding(
+                "RVS-CR-INVALID",
+                Severity.ERROR,
+                f"A change request file cannot be read: {exc}",
+                "Fix or remove the file in changes/.",
+                "changes",
+            )
+        )
+    for baseline_name in manifest_names(root):
+        try:
+            findings.extend(verify_baseline(root, baseline_name, deep=False))
+        except (GitError, BaselineError):
+            break  # no repository here (for example an exported copy): baselines cannot be checked
     on_disk = {d.prefix for d in docs}
     for decl in cfg.project.documents:
         if decl.prefix not in on_disk:

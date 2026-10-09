@@ -40,3 +40,14 @@ def test_cli_init(tmp_path: Path, capsys):  # type: ignore[no-untyped-def]
     assert main(["init", str(target), "--name", "Demo"]) == 2
     assert main(["init", str(tmp_path / "x"), "--name", "D", "--template", "nope"]) == 2
     assert main(["init", "--list-templates"]) == 0
+
+
+def test_a_new_project_validates_without_warnings(tmp_path):  # type: ignore[no-untyped-def]
+    """Empty documents are normal in a new project: information, not a warning."""
+    from rvs_core.validate import validate_project
+
+    create_from_template(tmp_path / "p", "P", "satellite")
+    report = validate_project(tmp_path / "p")
+    assert report.exit_code == 0
+    assert not [f for f in report.findings if f.severity.value in ("error", "warning")], report.findings
+    assert any(f.code == "DOORSTOP-EMPTY-DOCUMENT" for f in report.findings)

@@ -257,6 +257,13 @@ def _doorstop_finding(level: str, message: str) -> Finding:
             "Allocate or derive an item in the child document from it, or ignore it if no allocation is needed.",
             uid=uid,
         )
+    if message.endswith(": no items"):
+        return Finding(
+            "DOORSTOP-EMPTY-DOCUMENT",
+            Severity.INFO,
+            message.replace("DOORSTOP-WARNING: ", ""),
+            "Normal for a new project: add the first requirement to this document when you are ready.",
+        )
     if "suspect link" in message:
         return Finding(
             "DOORSTOP-SUSPECT-LINK",

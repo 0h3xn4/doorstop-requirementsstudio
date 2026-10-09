@@ -700,6 +700,7 @@ rvs import my-project items.xlsx --reason &quot;Re-numbered after review&quot;
 </tr>
 </tbody>
 </table>
+<p>Doorstop's own tree validation (<em>Run Full Doorstop Validation</em>, <code>rvs validate</code> without <code>--fast</code>) adds findings with codes starting <code>DOORSTOP-</code>: <code>DOORSTOP-EMPTY-DOCUMENT</code> (a document has no items yet: normal in a new project), <code>DOORSTOP-NO-CHILD-LINKS</code>, <code>DOORSTOP-SUSPECT-LINK</code>, <code>DOORSTOP-UNREVIEWED</code>, and <code>DOORSTOP-WARNING</code> / <code>DOORSTOP-ERROR</code> for anything else Doorstop reports.</p>
 <a name="troubleshooting"></a><h2 id="troubleshooting">Troubleshooting</h2>
 <p><strong>"The project could not be opened."</strong> Read the message: it names the file and what to fix. <code>rvs validate PROJECT</code> shows the same findings with codes.</p>
 <p><strong>A save is refused because of a reason.</strong> The item is baselined. Type why you are changing it.</p>

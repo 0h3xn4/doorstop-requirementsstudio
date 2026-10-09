@@ -99,6 +99,8 @@ Every problem has a stable code, a message and a hint on how to fix it.
 | `RVS-BASELINE-CORRUPT` | The tagged content of a baseline does not match its manifest. |
 | `RVS-BASELINE-NOTAG` | A baseline manifest exists but its Git tag is missing. |
 
+Doorstop's own tree validation (*Run Full Doorstop Validation*, `rvs validate` without `--fast`) adds findings with codes starting `DOORSTOP-`: `DOORSTOP-EMPTY-DOCUMENT` (a document has no items yet: normal in a new project), `DOORSTOP-NO-CHILD-LINKS`, `DOORSTOP-SUSPECT-LINK`, `DOORSTOP-UNREVIEWED`, and `DOORSTOP-WARNING` / `DOORSTOP-ERROR` for anything else Doorstop reports.
+
 ## Troubleshooting
 
 **"The project could not be opened."** Read the message: it names the file and what to fix. `rvs validate PROJECT` shows the same findings with codes.

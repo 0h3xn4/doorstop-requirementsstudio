@@ -81,4 +81,5 @@ One line each: decision — rationale. Status: **A** = answered by user, **D** =
 | D75 | Cold open of 5,000 items: Doorstop's YAML reads use libyaml's C parser (`CSafeLoader`) when PyYAML has it: 6.6 s -> 2.0 s. Tests read every example file with both loaders and compare the data; without libyaml the default loader stays | V14 (accepted by the user; now also meets the 3 s target) |
 | D76 | A hand-edited item file that no longer parses is reported as `RVS-ITEM-UNREADABLE` (fatal, names the file and line) instead of crashing the validation | Found while testing the loader swap |
 | D77 | Guide screenshots are generated from the fictional example (`scripts/build_screenshots.py`, offscreen Qt) and committed next to the bundled guide; a test checks every image the guide references exists | Post-v1 list: screenshots |
+| D78 | Editor layout: guided mode explains the field being edited in one help line under the form (hover tooltips remain) instead of a line under every field; the Problems dock starts at 120 px; form rows are 28 px. At 1400x960 at least 8 of the 14 fields are visible without scrolling (tested) | Screenshots showed three visible fields |
 

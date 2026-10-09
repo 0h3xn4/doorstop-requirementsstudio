@@ -79,7 +79,7 @@ def make_widget(session: ProjectSession, adef: AttributeDef, on_change: Callable
         widget = line
     tip = help_text(adef)
     widget.setToolTip((tip + "\n\nRequired." if adef.required else tip) if tip else "")
-    widget.setMinimumHeight(64 if isinstance(widget, QPlainTextEdit) else 32)
+    widget.setMinimumHeight(56 if isinstance(widget, QPlainTextEdit) else 28)
     return widget
 
 

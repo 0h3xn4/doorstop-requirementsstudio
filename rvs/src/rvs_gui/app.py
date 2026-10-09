@@ -201,6 +201,7 @@ class MainWindow(QMainWindow):
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.impact_panel)
         self.mode_label = QLabel()
         self.statusBar().addPermanentWidget(self.mode_label)
+        self.resizeDocks([self.problems_panel], [120], Qt.Orientation.Vertical)  # the editor needs the height more
         self._build_menus(tree_dock)
         self._connect()
         self._setup_inline_editing()

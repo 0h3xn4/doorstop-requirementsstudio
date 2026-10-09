@@ -34,7 +34,7 @@ The same from the command line: `rvs init my-project --name "My project" --templ
 
 ### Guided and expert mode
 
-RVS starts in **guided mode**: a step-by-step wizard for new requirements, a line of help under every field and a roomy table. When you know the tool, switch to **expert mode** with **View > Mode** or **Ctrl+Shift+M**: a dense table you can edit directly, and the quick "new item" dialog. Your choice is remembered.
+RVS starts in **guided mode**: a step-by-step wizard for new requirements, an explanation of the field you are editing and a roomy table. When you know the tool, switch to **expert mode** with **View > Mode** or **Ctrl+Shift+M**: a dense table you can edit directly, and the quick "new item" dialog. Your choice is remembered.
 
 | | Guided | Expert |
 |---|---|---|

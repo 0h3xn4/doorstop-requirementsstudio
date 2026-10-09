@@ -13,7 +13,9 @@ pytestmark = pytest.mark.skipif(not hasattr(yaml, "CSafeLoader"), reason="PyYAML
 
 
 def test_doorstop_uses_the_c_loader():
-    assert common.load_yaml.__defaults__ == (yaml.CSafeLoader,)
+    from rvs_core.adapter import yaml_parser_is_fast
+
+    assert common.load_yaml.__defaults__ == (yaml.CSafeLoader,) and yaml_parser_is_fast()
 
 
 @pytest.mark.parametrize("example", ["minimal10", "satellite300"])

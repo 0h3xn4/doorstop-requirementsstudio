@@ -39,6 +39,14 @@ _settings.ADDREMOVE_FILES = False
 if getattr(yaml, "CSafeLoader", None) is not None:
     _doorstop_common.load_yaml.__defaults__ = (yaml.CSafeLoader,)
 
+
+def yaml_parser_is_fast() -> bool:
+    """True when Doorstop reads items with libyaml's C parser (see above)."""
+    return getattr(yaml, "CSafeLoader", None) is not None and _doorstop_common.load_yaml.__defaults__ == (
+        yaml.CSafeLoader,
+    )
+
+
 # Doorstop item fields that are not RVS extended attributes.
 _CORE_FIELDS = frozenset({"level", "active", "normative", "derived", "reviewed", "text", "ref", "links", "header"})
 

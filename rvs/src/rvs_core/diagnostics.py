@@ -138,13 +138,9 @@ def selftest() -> list[CheckResult]:
         return f"{len(data)} bytes, reads back unchanged"
 
     def yaml_parser() -> str:
-        import doorstop.common as doorstop_common
-        import yaml
+        from rvs_core.adapter import yaml_parser_is_fast
 
-        fast = getattr(yaml, "CSafeLoader", None) is not None and doorstop_common.load_yaml.__defaults__ == (
-            yaml.CSafeLoader,
-        )
-        return "libyaml (fast)" if fast else "pure Python (slower on large projects)"
+        return "libyaml (fast)" if yaml_parser_is_fast() else "pure Python (slower on large projects)"
 
     def baseline() -> str:
         from rvs_core.changecontrol.baselines import create_baseline, verify_baseline

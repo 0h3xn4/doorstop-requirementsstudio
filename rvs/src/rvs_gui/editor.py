@@ -3,7 +3,7 @@ live preview, parent links, a mandatory-when-baselined reason, and the item's ow
 
 from typing import Any
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QEvent, QObject, Qt, Signal
 from PySide6.QtWidgets import (
     QFormLayout,
     QHBoxLayout,
@@ -29,6 +29,8 @@ from rvs_gui.fields import parse_list as _parse_list
 from rvs_gui.session import ProjectSession
 from rvs_gui.widgets import AcronymHighlighter
 
+NO_FIELD_HELP = "Select a field to see what it means."
+
 # Attributes edited elsewhere or managed by RVS.
 _HIDDEN = {"rvs_schema_version"}
 _LIST_TYPES = fields.LIST_TYPES
@@ -49,12 +51,12 @@ class RequirementEditor(QWidget):
         self._loading = False
         self._last_dirty = False
         self._help_visible = True
-        self._help_labels: list[QLabel] = []
+        self._help_for: dict[QWidget, str] = {}
 
         self.heading = QLabel("No item selected")
         self.heading.setStyleSheet("font-size: 18px; font-weight: 600;")
         self.form = QFormLayout()
-        self.form.setVerticalSpacing(4)
+        self.form.setVerticalSpacing(2)
         self.form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         self.form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         self.statement = QPlainTextEdit()
@@ -71,7 +73,7 @@ class RequirementEditor(QWidget):
         self.clear_suspect_button.setToolTip("Accept the current state of the parent items this item links to")
         self.clear_suspect_button.setEnabled(False)
         self.item_findings = QListWidget()
-        self.item_findings.setMaximumHeight(110)
+        self.item_findings.setMaximumHeight(72)
         self.item_findings.setWordWrap(True)
 
         text_split = QSplitter()
@@ -79,16 +81,26 @@ class RequirementEditor(QWidget):
         text_split.addWidget(self.preview)
         form_holder = QWidget()
         form_holder.setLayout(self.form)
-        form_scroll = QScrollArea()
-        form_scroll.setWidgetResizable(True)
-        form_scroll.setWidget(form_holder)
-        form_scroll.setFrameShape(QScrollArea.Shape.NoFrame)
-        form_scroll.setMinimumHeight(280)
-        text_split.setMinimumHeight(150)
+        self.form_scroll = QScrollArea()
+        self.form_scroll.setWidgetResizable(True)
+        self.form_scroll.setWidget(form_holder)
+        self.form_scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        self.form_scroll.setMinimumHeight(200)
+        # Guided mode explains the field being edited here, instead of a help line under every field (which left
+        # room for only three fields at once).
+        self.help_line = fields.help_label(NO_FIELD_HELP)
+        self.help_line.setMinimumHeight(44)
+        self.help_line.setAlignment(Qt.AlignmentFlag.AlignTop)
+        form_pane = QWidget()
+        pane_layout = QVBoxLayout(form_pane)
+        pane_layout.setContentsMargins(0, 0, 0, 0)
+        pane_layout.addWidget(self.form_scroll, 1)
+        pane_layout.addWidget(self.help_line)
+        text_split.setMinimumHeight(100)
         vertical = QSplitter(Qt.Orientation.Vertical)
-        vertical.addWidget(form_scroll)
+        vertical.addWidget(form_pane)
         vertical.addWidget(text_split)
-        vertical.setStretchFactor(0, 3)
+        vertical.setStretchFactor(0, 5)
         vertical.setStretchFactor(1, 2)
         buttons = QHBoxLayout()
         buttons.addWidget(self.why, 1)
@@ -115,7 +127,7 @@ class RequirementEditor(QWidget):
         while self.form.rowCount():
             self.form.removeRow(0)
         self._fields.clear()
-        self._help_labels.clear()
+        self._help_for.clear()
         cfg = self.session.cfg
         kind = self.session.kind_of(item.document)
         self._defs = [
@@ -125,7 +137,7 @@ class RequirementEditor(QWidget):
             widget = fields.make_widget(self.session, adef, self._on_edited)
             self._fields[adef.name] = widget
             self.form.addRow(fields.label_text(adef), widget)
-            self._add_help(fields.help_text(adef))
+            self._track_help(widget, fields.help_text(adef))
         decl = cfg.project.document(item.document)
         root_doc = decl is not None and decl.parent is None
         parent_doc = decl.parent if decl else None
@@ -141,26 +153,30 @@ class RequirementEditor(QWidget):
         parents.textChanged.connect(self._on_edited)
         self._fields["parents"] = parents
         self.form.addRow("Parents", parents)
-        self._add_help("The requirements this one derives from, from the parent document." if not root_doc else "")
+        self._track_help(
+            parents,
+            "The requirements this one derives from, from the parent document."
+            if not root_doc
+            else "A top-level document: its requirements have no parents.",
+        )
         rules = {r["id"]: r.get("params", {}) for r in cfg.rules["rules"]}
         params = rules.get("undefined-acronym", {})
         self.highlighter.configure(
             set(cfg.glossary.acronyms), int(params.get("min_length", 2)), set(params.get("ignore", []))
         )
 
-    def _add_help(self, text: str) -> None:
-        label = fields.help_label(text)
-        label.setVisible(self._help_visible and bool(text))
-        self._help_labels.append(label)
-        self.form.addRow("", label)
+    def _track_help(self, widget: QWidget, text: str) -> None:
+        self._help_for[widget] = text
+        widget.installEventFilter(self)
+
+    def eventFilter(self, obj: QObject, event: QEvent) -> bool:  # noqa: N802 - Qt API
+        if event.type() == QEvent.Type.FocusIn and isinstance(obj, QWidget) and obj in self._help_for:
+            self.help_line.setText(self._help_for[obj] or NO_FIELD_HELP)
+        return False
 
     def restyle(self) -> None:
-        """Rebuild the form so help labels pick up the colours of the current theme."""
-        if self._item is not None and self.current_uid:
-            dirty = self.is_dirty()
-            if not dirty:
-                self._rebuild_form(self._item)
-                self.load(self.current_uid)
+        """Re-apply the colours of the current theme to the help line."""
+        self.help_line.setStyleSheet(fields.help_label("").styleSheet())
 
     def help_visible(self) -> bool:
         return self._help_visible
@@ -168,8 +184,7 @@ class RequirementEditor(QWidget):
     def set_help_visible(self, visible: bool) -> None:
         """Guided mode shows a line of help under every field; expert mode keeps the tooltips only."""
         self._help_visible = visible
-        for label in self._help_labels:
-            label.setVisible(visible and bool(label.text()))
+        self.help_line.setVisible(visible)
 
     def field(self, name: str) -> Any:
         return self._fields[name]

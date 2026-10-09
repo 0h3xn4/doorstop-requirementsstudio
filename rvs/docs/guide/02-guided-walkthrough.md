@@ -4,7 +4,7 @@ This walkthrough uses the *Small satellite* example (**File > Open Example**). E
 
 ## 1. Find your way around
 
-Click **EPS** in the Documents panel. The table shows the electrical power subsystem requirements. Select one: the editor on the right shows its statement, its fields (each with a line of help) and **Problems with this item**.
+Click **EPS** in the Documents panel. The table shows the electrical power subsystem requirements. Select one: the editor on the right shows its statement, its fields (a help line explains the one you are in) and **Problems with this item**.
 
 Use **Ctrl+F** to search by ID, title or statement, the status box to filter, and *Only items with problems* to see what needs attention. **Ctrl+G** jumps to an ID. **F8** and **Shift+F8** step through the items that have problems.
 

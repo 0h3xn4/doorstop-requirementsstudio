@@ -343,4 +343,4 @@ class DoorstopProject:
 
 
 def framework_version() -> str:
-    return str(doorstop.VERSION)
+    return str(doorstop.__version__)

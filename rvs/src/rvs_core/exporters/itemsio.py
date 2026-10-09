@@ -106,8 +106,9 @@ def export_items_csv(cfg: ProjectConfig, items: Sequence[ItemData], prov: Proven
 def export_items_xlsx(cfg: ProjectConfig, items: Sequence[ItemData], prov: Provenance) -> bytes:
     cols, defs = item_columns(cfg), _attr_defs(cfg)
     wb = Workbook()
-    wb.remove(wb.active)  # type: ignore[arg-type]
+    wb.remove(wb.active)
     ordered = _ordered(cfg, items)
+    wrap = Alignment(vertical="top", wrap_text=True)
     for decl in cfg.project.documents:
         ws = wb.create_sheet(decl.prefix)
         rows = [_row_for(cfg, i, cols, defs) for i in ordered if i.document == decl.prefix]
@@ -117,7 +118,7 @@ def export_items_xlsx(cfg: ProjectConfig, items: Sequence[ItemData], prov: Prove
             for c, value in enumerate(row, start=1):
                 cell = ws.cell(row=r, column=c)
                 set_text(cell, value)
-                cell.alignment = Alignment(vertical="top", wrap_text=True)
+                cell.alignment = wrap
         style_header(ws, len(cols))
         fit_columns(ws, cols, rows)
     provenance_sheet(wb, prov)

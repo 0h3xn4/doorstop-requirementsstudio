@@ -1,0 +1,8 @@
+# Impact of changing SYS-0002
+# Project: Minimal example
+# Baseline: working copy
+# Generated: 2026-01-02 03:04:05 by golden
+# Tool: rvs 0.1.0 (doorstop 3.2)
+Item,Depth,Via,Title
+EPS-0001,1,parent,Battery capacity
+VER-0001,2,verifies,Eclipse power analysis

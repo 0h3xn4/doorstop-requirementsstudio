@@ -26,6 +26,13 @@ PROBE = textwrap.dedent(
     from rvs_core.validate import validate_project
     report = validate_project(__import__("pathlib").Path(sys.argv[1]))
     assert report.exit_code == 0, [f.format() for f in report.findings]
+    # every exporter (HTML, DOCX, PDF, XLSX, CSV import/export) must also work with the network blocked
+    from datetime import datetime
+    from rvs_core.exporters.catalog import all_outputs
+    from rvs_core.matrices import Provenance
+    prov = Provenance("0", "3", "p", "w", datetime(2026, 1, 1), "u")
+    outs = all_outputs(report.config, report.items, report.graph, prov, trace=("SYS", "EPS", "down"), impact_uid="SYS-0002")
+    assert len(outs) == 29 and all(outs.values())
     import json
     banned = sorted(m for m in sys.modules if m.split(".")[0] in {
         "requests", "urllib3", "bottle", "plantuml_markdown", "ftplib", "smtplib", "xmlrpc", "socketserver",

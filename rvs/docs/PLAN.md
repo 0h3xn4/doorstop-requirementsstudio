@@ -21,7 +21,7 @@ Rule for every milestone: tests first; mypy + ruff clean; offline test and `door
 - Typed links + validation, traceability matrix (both directions, gaps), VCM (placeholder layout), impact analysis, coverage dashboard, graph view, stress5000 project.
 - **Accept:** golden files for matrices; open 5k < 3 s, matrices < 5 s.
 
-## M4 Import and export
+## M4 Import and export  *(done, ReqIF deferred — see docs/demo/M4.md)*
 - CSV/XLSX import & export, DOCX, PDF, HTML with provenance blocks; Hypothesis round-trip and byte-identical regeneration; golden files on 3 projects. ReqIF deferred (D04) behind the format-plugin interface.
 - **Accept:** unchanged-item round trip yields no diff; GUI stays responsive during export.
 

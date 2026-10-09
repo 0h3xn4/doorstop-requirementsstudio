@@ -75,5 +75,5 @@ mypy_path = "src"
 files = ["src"]
 
 [[tool.mypy.overrides]]
-module = ["doorstop.*", "fastjsonschema"]
+module = ["doorstop.*", "fastjsonschema", "openpyxl.*", "docx.*", "reportlab.*"]
 ignore_missing_imports = true

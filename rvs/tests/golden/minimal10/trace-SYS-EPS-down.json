@@ -1,0 +1,47 @@
+{
+  "title": "Traceability SYS → EPS",
+  "columns": [
+    "Source",
+    "Title",
+    "Linked items",
+    "Link types",
+    "Gap"
+  ],
+  "rows": [
+    [
+      "SYS-0001",
+      "Payload power",
+      "EPS-0002",
+      "parent",
+      ""
+    ],
+    [
+      "SYS-0002",
+      "Eclipse operation",
+      "EPS-0001",
+      "parent",
+      ""
+    ],
+    [
+      "SYS-0003",
+      "Mass budget",
+      "EPS-0003",
+      "parent",
+      ""
+    ]
+  ],
+  "flags": [
+    null,
+    null,
+    null
+  ],
+  "notes": [],
+  "provenance": {
+    "project": "Minimal example",
+    "baseline": "working copy",
+    "generated": "2026-01-02 03:04:05",
+    "user": "golden",
+    "tool_version": "0.1.0",
+    "framework_version": "3.2"
+  }
+}

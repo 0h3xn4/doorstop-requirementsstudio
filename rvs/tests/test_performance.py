@@ -63,3 +63,45 @@ def test_cold_open_is_reported(stress: Path):
     t = time.perf_counter()
     validate_project(stress, doorstop=False)
     print(f"\ncold open (no cache): {time.perf_counter() - t:.2f} s")
+
+
+def test_export_and_import_timings_at_5000_items(stress: Path):
+    """Reported, not asserted tightly: exports run on a worker thread in the GUI. Only a generous ceiling is enforced."""
+    from rvs_core.exporters import render_doc, render_table
+    from rvs_core.exporters.builders import spec_doc
+    from rvs_core.exporters.itemsio import (
+        export_items_csv,
+        export_items_xlsx,
+        plan_import,
+        read_csv,
+        read_xlsx,
+    )
+
+    report = validate_project(stress, doorstop=False)
+    cfg, _ = load_project_config(stress)
+    prov = Provenance.now(cfg, user="perf")
+    graph = report.graph
+    assert graph is not None
+    timings: dict[str, float] = {}
+
+    def timed(name: str, fn):  # type: ignore[no-untyped-def]
+        t = time.perf_counter()
+        out = fn()
+        timings[name] = time.perf_counter() - t
+        return out
+
+    csv_bytes = timed("items csv export", lambda: export_items_csv(cfg, report.items, prov))
+    xlsx_bytes = timed("items xlsx export", lambda: export_items_xlsx(cfg, report.items, prov))
+    rows = timed("items csv read", lambda: read_csv(csv_bytes))
+    timed("items xlsx read", lambda: read_xlsx(xlsx_bytes))
+    plan = timed("import plan (5000 rows)", lambda: plan_import(cfg, report.items, rows))
+    assert plan.count("unchanged") == 5000
+    vcm = build_vcm(cfg, report.items, graph, VcmFilter(), provenance=prov)
+    for fmt in ("xlsx", "html", "docx", "pdf"):
+        timed(f"vcm {fmt} ({len(vcm.rows)} rows)", lambda fmt=fmt: render_table(vcm, fmt))
+    spec = spec_doc(cfg, report.items, graph, None, prov)
+    for fmt in ("html", "docx", "pdf"):
+        timed(f"spec {fmt} (5000 items)", lambda fmt=fmt: render_doc(spec, fmt))
+    for name, seconds in timings.items():
+        print(f"\n{name:34} {seconds:6.1f} s")
+    assert max(timings.values()) < 300

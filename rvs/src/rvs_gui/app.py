@@ -4,7 +4,7 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from PySide6.QtCore import QItemSelectionModel, QPoint, Qt
+from PySide6.QtCore import QItemSelectionModel, QPoint, Qt, Signal
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -26,11 +26,17 @@ from PySide6.QtWidgets import (
 )
 
 import rvs_core
+from rvs_core.exporters.export_request import ExportRequest, build_output
+from rvs_core.exporters.itemsio import ImportReport, apply_import, read_csv, read_xlsx
+from rvs_core.matrices import Provenance
 from rvs_gui.dialogs import NewItemDialog
 from rvs_gui.doctree import DocumentTree
 from rvs_gui.editor import RequirementEditor
+from rvs_gui.export_dialog import ExportDialog
 from rvs_gui.graph_view import GraphView
 from rvs_gui.impact_panel import ImpactPanel
+from rvs_gui.import_dialog import ImportDialog
+from rvs_gui.jobs import run_in_background
 from rvs_gui.matrix_views import CoverageView, TraceabilityView, VcmView
 from rvs_gui.models import COLUMNS, ItemFilterProxy, ItemTableModel
 from rvs_gui.problems import ProblemsPanel
@@ -66,6 +72,8 @@ class FilterBar(QWidget):
 
 
 class MainWindow(QMainWindow):
+    export_done = Signal(str, str)  # (path, error message or '')
+
     def __init__(self, user: str | None = None) -> None:
         super().__init__()
         self.setWindowTitle(f"{TITLE} {rvs_core.__version__}")
@@ -137,10 +145,16 @@ class MainWindow(QMainWindow):
         self.action_open = QAction("Open Project…", self)
         self.action_open.setShortcut(QKeySequence.StandardKey.Open)
         self.action_open.triggered.connect(self.choose_project)
+        self.action_import = QAction("Import Items…", self)
+        self.action_import.setShortcut("Ctrl+I")
+        self.action_import.triggered.connect(self.import_items_dialog)
+        self.action_export = QAction("Export…", self)
+        self.action_export.setShortcut("Ctrl+E")
+        self.action_export.triggered.connect(self.export_dialog)
         quit_action = QAction("Quit", self)
         quit_action.setShortcut(QKeySequence.StandardKey.Quit)
         quit_action.triggered.connect(self.close)
-        file_menu.addActions([self.action_open, quit_action])
+        file_menu.addActions([self.action_open, self.action_import, self.action_export, quit_action])
 
         item_menu = bar.addMenu("Item")
         self.action_new = QAction("New Requirement…", self)
@@ -187,6 +201,7 @@ class MainWindow(QMainWindow):
         self.editor.message.connect(self.notification.show_message)
         for view in (self.trace_view, self.vcm_view, self.coverage_view):
             view.message.connect(self.notification.show_message)
+            view.export_done.connect(self.export_done)
         self.editor.item_loaded.connect(self._on_editor_loaded)
         self.impact_panel.item_requested.connect(self.select_item)
         self.editor.dirty_changed.connect(lambda _d: self.statusBar().showMessage(self._status_text()))
@@ -282,6 +297,103 @@ class MainWindow(QMainWindow):
     def _on_editor_loaded(self, uid: str) -> None:
         self.impact_panel.set_item(uid)
         self.graph_view.show_item(uid)
+
+    # export / import ###########################################################
+    def export_dialog(self) -> None:
+        if self.session.cfg is None:
+            self.notification.show_message("info", "Open a project first.")
+            return
+        dlg = ExportDialog(self.session, self, current_uid=self.editor.current_uid or "")
+        if dlg.exec():
+            if not dlg.path.text().strip():
+                self.notification.show_message("warning", "Choose a file name for the export.")
+                return
+            self.export_to(dlg.request(), dlg.destination())
+
+    def export_to(self, request: ExportRequest, path: Path) -> None:
+        """Build and write ``request`` to ``path`` on a worker thread; the window stays usable."""
+        s = self.session
+        if s.cfg is None or s.graph is None:
+            self.notification.show_message("info", "Open a project first.")
+            return
+        cfg, items, graph, user = s.cfg, list(s.items), s.graph, s.user
+
+        def work() -> str:
+            data = build_output(request, cfg, items, graph, Provenance.now(cfg, user=user))
+            path.write_bytes(data)
+            return str(path)
+
+        def done(written: str) -> None:
+            self.notification.show_message("success", f"Exported to {written}.")
+            self.export_done.emit(written, "")
+
+        def failed(exc: Exception) -> None:
+            if isinstance(exc, OSError):
+                text = f"The file {path} could not be written: {exc.strerror}. Choose another location."
+            elif isinstance(exc, ValueError):
+                text = str(exc)
+            else:
+                text = f"The export to {path} failed: {exc}"
+            self.notification.show_message("error", text)
+            self.export_done.emit(str(path), text)
+
+        self.notification.show_message("info", f"Exporting to {path} …")
+        run_in_background(work, done, failed)
+
+    def import_items_dialog(self) -> None:
+        if self.session.cfg is None:
+            self.notification.show_message("info", "Open a project first.")
+            return
+        chosen, _ = QFileDialog.getOpenFileName(self, "Import items", "", "Item tables (*.csv *.xlsx)")
+        if not chosen:
+            return
+        rows = self.read_import_file(Path(chosen))
+        if rows is None:
+            return
+        dlg = ImportDialog(self.session, rows, self)
+        if dlg.exec():
+            self.apply_import(dlg.plan, why=dlg.reason.text(), skip_errors=dlg.skip_errors.isChecked())
+
+    def read_import_file(self, path: Path) -> list[dict[str, str]] | None:
+        suffix = path.suffix.lower()
+        if suffix not in (".csv", ".xlsx"):
+            self.notification.show_message("error", f"{path.name} cannot be imported: the file must be .csv or .xlsx.")
+            return None
+        try:
+            data = path.read_bytes()
+            return read_csv(data) if suffix == ".csv" else read_xlsx(data)
+        except Exception as exc:  # noqa: BLE001 - corrupt or unreadable file: plain message, no traceback
+            self.notification.show_message(
+                "error", f"{path.name} could not be read ({exc}). Check that it is an item table exported by RVS."
+            )
+            return None
+
+    def apply_import(self, plan: object, why: str = "", skip_errors: bool = False) -> ImportReport | None:
+        from rvs_core.exporters.itemsio import ImportPlan
+
+        assert isinstance(plan, ImportPlan) and self.session.root is not None
+        if self.editor.is_dirty():
+            self.notification.show_message("warning", "Save or revert your changes before importing.")
+            return None
+        try:
+            report = apply_import(self.session.root, plan, user=self.session.user, why=why, skip_errors=skip_errors)
+        except Exception as exc:  # noqa: BLE001 - friendly message
+            self.notification.show_message(
+                "error",
+                f"The import stopped: {exc}. Items processed before the problem were written; check the Problems panel.",
+            )
+            self.session.refresh()
+            return None
+        self.session.refresh()
+        if not report.applied:
+            self.notification.show_message("error", f"{report.errors} row(s) have errors, so nothing was imported.")
+        else:
+            self.notification.show_message(
+                "success",
+                f"Imported: {report.created} created, {report.updated} updated, {report.unchanged} unchanged"
+                + (f", {report.errors} skipped." if report.errors else "."),
+            )
+        return report
 
     def run_full_validation(self) -> None:
         if self.session.cfg is None:

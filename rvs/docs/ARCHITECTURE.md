@@ -78,6 +78,12 @@ project/
 - GUI: tabs Items / Traceability / VCM / Coverage / Graph, Impact dock, "Clear suspect links", New Verification Item. `ProjectSession` reuses the validation report's items, docs and graph (no second load).
 - Measured at 5,000 items: warm open + rules + links 0.4 s; graph + VCM + trace + coverage 0.04 s; cold open 6.0 s (V14).
 
+## 5d. As built in M4
+- `rvs_core.exporters`: `model` (neutral Doc) + `builders` (matrix_doc, spec_doc) -> `html_out`, `docx_out`, `pdf_out`; `xlsx_out` (tables); `itemsio` (item table CSV/XLSX export, `read_csv`/`read_xlsx`, `plan_import` -> `apply_import`); `export_request` (ExportRequest/build_output); `catalog` (all outputs, for golden tests); `zipnorm`; `mdlite`.
+- Offline: the offline test now also runs all 29 outputs of a project with sockets blocked. Fonts: 4 TTF (PDF) and 4 subset WOFF (HTML) in `exporters/fonts`.
+- GUI: File > Export… / Import Items…, export button on each matrix tab (format by file extension), background `jobs`.
+- Measured at 5,000 items: items CSV 0.1 s, XLSX export 2.1 s, import plan 0.2 s, VCM xlsx/pdf/docx 0.5/3.6/6.1 s, spec html/pdf/docx 0.1/9.1/23 s (background thread).
+
 ## 6. Risks
 1. Doorstop's transitive network libs vs. offline test (DEVIATIONS V01).
 2. Doorstop load time at 5,000 items — benchmark in M1 spike; fallback is the one-pass cached index.

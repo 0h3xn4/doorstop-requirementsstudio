@@ -1,0 +1,16 @@
+﻿# Items
+# Project: Minimal example
+# Baseline: working copy
+# Generated: 2026-01-02 03:04:05 by golden
+# Tool: rvs 0.1.0 (doorstop 3.2)
+id,document,level,normative,derived,active,header,ref,text,parents,title,rationale,type,priority,status,owner,source,standard_clause,verify_method,verify_level,link_satisfies,link_refines,link_conflicts,link_refs,proc_id,v_status,evidence,executed_on,responsible,nonconformances,link_verifies
+SYS-0004,SYS,1.0,no,no,yes,System requirements,,Requirements derived from the mission statement.,,Mission-derived,,,,draft,,,,,,,,,,,,,,,,
+SYS-0001,SYS,1.1,yes,no,yes,,,The spacecraft shall provide electrical power to all payloads.,,Payload power,,functional,high,draft,systems,,,analysis,system,,,,,,,,,,,
+SYS-0002,SYS,1.2,yes,no,yes,,,The spacecraft shall operate in sunlight and eclipse.,,Eclipse operation,,operational,high,draft,systems,,,test,system,,,,,,,,,,,
+SYS-0003,SYS,1.3,yes,no,yes,,,The spacecraft mass shall not exceed 50 kg.,,Mass budget,,performance,high,draft,systems,,,inspection,system,,,,,,,,,,,
+EPS-0001,EPS,1.1,yes,no,yes,,,The battery shall store at least the energy needed for one eclipse.,SYS-0002,Battery capacity,,design,high,draft,systems,,,analysis,subsystem,,,,,,,,,,,
+EPS-0002,EPS,1.2,yes,no,yes,,,The solar array shall generate power in sunlight for all payloads.,SYS-0001,Array output,,performance,high,draft,systems,,,test,subsystem,,,,,,,,,,,
+EPS-0003,EPS,1.3,yes,no,yes,,,The EPS mass shall not exceed 8 kg.,SYS-0003,EPS mass,,performance,high,draft,systems,,,inspection,subsystem,,,,,,,,,,,
+VER-0001,VER,1.1,yes,yes,yes,,,Verify EPS-0001: eclipse power analysis.,,Eclipse power analysis,,,,,,,,analysis,system,,,,,VER-EPS-A-001,planned,,,,,EPS-0001
+VER-0002,VER,1.2,yes,yes,yes,,,Verify EPS-0002: array output test.,,Array output test,,,,,,,,test,subsystem,,,,,VER-EPS-T-001,planned,,,,,EPS-0002
+VER-0003,VER,1.3,yes,yes,yes,,,Verify EPS-0003: eps mass inspection.,,EPS mass inspection,,,,,,,,inspection,subsystem,,,,,VER-EPS-I-001,planned,,,,,EPS-0003

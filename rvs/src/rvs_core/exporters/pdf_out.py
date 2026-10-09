@@ -2,6 +2,7 @@
 
 import io
 from importlib import resources
+from typing import Any
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
@@ -65,13 +66,13 @@ def render_pdf(doc: Doc) -> bytes:
         "note", parent=base, fontName=ITALIC, fontSize=8.5, backColor=colors.HexColor("#F4F4F4"), borderPadding=4
     )
 
-    story: list = [RLParagraph(_esc(doc.title), title)]
+    story: list[Any] = [RLParagraph(_esc(doc.title), title)]
     story += [RLParagraph(_esc(line), small) for line in doc.provenance.lines()]
     story += [Spacer(1, 4 * mm)]
     story += [RLParagraph(_esc(n), note) for n in doc.notes]
 
-    def markdown(text: str) -> list:
-        flow: list = []
+    def markdown(text: str) -> list[Any]:
+        flow: list[Any] = []
         for block in parse(text):
             if isinstance(block, Bullets):
                 items = [ListItem(RLParagraph(_markup(i), base)) for i in block.items]
@@ -108,7 +109,7 @@ def render_pdf(doc: Doc) -> bytes:
             story.append(table(block))
         elif isinstance(block, Entry):
             head = f"{block.uid} — {block.title}" if block.title else block.uid
-            parts: list = [RLParagraph(_esc(head), h[3]), *markdown(block.text)]
+            parts: list[Any] = [RLParagraph(_esc(head), h[3]), *markdown(block.text)]
             if block.fields:
                 parts.append(RLParagraph(" · ".join(f"<b>{_esc(k)}:</b> {_esc(v)}" for k, v in block.fields), small))
             if block.rationale:

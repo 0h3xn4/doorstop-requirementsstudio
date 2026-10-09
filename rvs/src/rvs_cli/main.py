@@ -7,12 +7,10 @@ from collections.abc import Sequence
 from pathlib import Path
 
 import rvs_core
-from rvs_core.exporters import BINARY_FORMATS, DOC_FORMATS, TABLE_FORMATS, render_doc, render_table
-from rvs_core.exporters.builders import spec_doc
+from rvs_core.exporters import BINARY_FORMATS, TABLE_FORMATS
+from rvs_core.exporters.export_request import ExportRequest, build_output
 from rvs_core.exporters.itemsio import (
     apply_import,
-    export_items_csv,
-    export_items_xlsx,
     plan_import,
     read_csv,
     read_xlsx,
@@ -20,14 +18,8 @@ from rvs_core.exporters.itemsio import (
 from rvs_core.findings import Severity
 from rvs_core.matrices import (
     Provenance,
-    VcmFilter,
-    build_traceability,
-    build_vcm,
-    coverage_table,
-    impact_table,
 )
-from rvs_core.trace import coverage, impact
-from rvs_core.validate import ValidationReport, validate_project
+from rvs_core.validate import validate_project
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -82,36 +74,29 @@ def _validate(args: argparse.Namespace) -> int:
     return report.exit_code
 
 
-def _build_output(args: argparse.Namespace, report: ValidationReport) -> bytes:
-    cfg, items, graph = report.config, report.items, report.graph
-    assert cfg is not None and graph is not None
-    prov = Provenance.now(cfg)
-    fmt = args.format
+def _request(args: argparse.Namespace) -> ExportRequest:
     if args.items:
-        if fmt not in ("csv", "xlsx"):
-            raise ValueError("--items can be written as csv or xlsx")
-        return export_items_csv(cfg, items, prov) if fmt == "csv" else export_items_xlsx(cfg, items, prov)
-    if args.spec:
-        if fmt not in DOC_FORMATS:
-            raise ValueError(f"--spec can be written as {', '.join(DOC_FORMATS)}")
-        return render_doc(spec_doc(cfg, items, graph, args.document or None, prov), fmt)
-    if args.vcm:
-        flt = VcmFilter(tuple(args.document), tuple(args.method), tuple(args.level), tuple(args.status), args.only_gaps)
-        table = build_vcm(cfg, items, graph, flt, provenance=prov)
+        kind = "items"
+    elif args.spec:
+        kind = "spec"
+    elif args.vcm:
+        kind = "vcm"
     elif args.trace:
+        kind = "trace"
+    elif args.coverage:
+        kind = "coverage"
+    else:
+        kind = "impact"
+    trace = ("", "", "down")
+    if kind == "trace":
         parts = args.trace.split(":")
         if len(parts) not in (2, 3):
             raise ValueError("--trace needs SRC:DST or SRC:DST:up|down, for example SYS:EPS")
-        table = build_traceability(
-            cfg, items, graph, parts[0], parts[1], parts[2] if len(parts) == 3 else "down", provenance=prov
-        )
-    elif args.coverage:
-        table = coverage_table(cfg, coverage(cfg, items, graph), prov)
-    else:
-        if args.impact not in graph.uids:
-            raise ValueError(f"Item {args.impact} does not exist in this project.")
-        table = impact_table(items, impact(graph, args.impact), prov)
-    return render_table(table, fmt)
+        trace = (parts[0], parts[1], parts[2] if len(parts) == 3 else "down")
+    return ExportRequest(
+        kind, args.format, tuple(args.document), tuple(args.method), tuple(args.level), tuple(args.status),
+        args.only_gaps, trace, args.impact or "",
+    )  # fmt: skip
 
 
 def _export(args: argparse.Namespace) -> int:
@@ -124,7 +109,8 @@ def _export(args: argparse.Namespace) -> int:
             print(f.format(), file=sys.stderr)
         return 3
     try:
-        data = _build_output(args, report)
+        assert report.graph is not None
+        data = build_output(_request(args), report.config, report.items, report.graph, Provenance.now(report.config))
     except ValueError as exc:
         print(f"rvs export: {exc}", file=sys.stderr)
         return 2

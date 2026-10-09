@@ -143,13 +143,16 @@ def render_docx(doc: Doc) -> bytes:
         elif isinstance(block, Entry):
             d.add_heading(f"{block.uid} — {block.title}" if block.title else block.uid, level=3)
             _markdown(d, block.text)
-            for key, value in block.fields:
+            if block.fields:  # one paragraph per entry: far fewer document objects than one per field
                 p = d.add_paragraph()
-                p.paragraph_format.space_after = Pt(0)
-                k = p.add_run(f"{key}: ")
-                k.bold = True
-                k.font.size = Pt(9)
-                p.add_run(value).font.size = Pt(9)
+                p.paragraph_format.space_after = Pt(2)
+                for n, (key, value) in enumerate(block.fields):
+                    if n:
+                        p.add_run("  ·  ").font.size = Pt(9)
+                    k = p.add_run(f"{key}: ")
+                    k.bold = True
+                    k.font.size = Pt(9)
+                    p.add_run(value).font.size = Pt(9)
             if block.rationale:
                 p = d.add_paragraph()
                 p.add_run("Rationale: ").bold = True

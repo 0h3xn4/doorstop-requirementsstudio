@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from rvs_core.exporters import TABLE_FORMATS, render_table
 from rvs_core.matrices import (
     MatrixTable,
     Provenance,
@@ -28,6 +29,7 @@ from rvs_core.matrices import (
 )
 from rvs_core.matrices.render import to_csv
 from rvs_core.trace import coverage
+from rvs_gui.jobs import run_in_background
 from rvs_gui.models import Index
 from rvs_gui.session import ProjectSession
 from rvs_gui.theme import TOKENS
@@ -73,6 +75,7 @@ class MatrixView(QWidget):
     """Title block (provenance, notes), a table and an export button. Subclasses add filter controls."""
 
     message = Signal(str, str)
+    export_done = Signal(str, str)  # (path, error message or '')
 
     def __init__(self, session: ProjectSession) -> None:
         super().__init__()
@@ -88,7 +91,7 @@ class MatrixView(QWidget):
         self.provenance_label.setStyleSheet(f"color: {TOKENS['text_secondary']};")
         self.notes_label = QLabel()
         self.notes_label.setWordWrap(True)
-        self.export_button = QPushButton("Export CSV…")
+        self.export_button = QPushButton("Export…")
         self.export_button.clicked.connect(self._choose_export)
         self.controls = QHBoxLayout()
         self.controls.addStretch(1)
@@ -128,9 +131,38 @@ class MatrixView(QWidget):
         return Provenance.now(self.session.cfg, user=self.session.user)
 
     def _choose_export(self) -> None:
-        path, _ = QFileDialog.getSaveFileName(self, "Export CSV", "", "CSV files (*.csv)")
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export", "", "Excel (*.xlsx);;CSV (*.csv);;Word (*.docx);;PDF (*.pdf);;HTML (*.html);;JSON (*.json)"
+        )
         if path:
-            self.export_csv(Path(path))
+            self.export_file(Path(path))
+
+    def export_file(self, path: Path) -> None:
+        """Write the table shown here to ``path``; the format follows the file extension. Runs in the background."""
+        fmt = path.suffix.lstrip(".").lower()
+        if fmt not in TABLE_FORMATS:
+            self.message.emit("error", f"'.{fmt}' is not a supported format. Use one of: {', '.join(TABLE_FORMATS)}.")
+            return
+        table = self.matrix
+
+        def work() -> int:
+            path.write_bytes(render_table(table, fmt))
+            return len(table.rows)
+
+        def done(count: int) -> None:
+            self.message.emit("success", f"Exported {count} rows to {path}.")
+            self.export_done.emit(str(path), "")
+
+        def failed(exc: Exception) -> None:
+            text = (
+                f"The file {path} could not be written: {exc.strerror}. Choose another location."
+                if isinstance(exc, OSError)
+                else f"The export failed: {exc}"
+            )
+            self.message.emit("error", text)
+            self.export_done.emit(str(path), text)
+
+        run_in_background(work, done, failed)
 
     def export_csv(self, path: Path) -> None:
         try:

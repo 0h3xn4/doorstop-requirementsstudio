@@ -73,14 +73,16 @@ def render_xlsx(table: MatrixTable) -> bytes:
     ws.title = "Matrix"
     for c, name in enumerate(table.columns, start=1):
         ws.cell(row=1, column=c, value=name)
+    wrap = Alignment(vertical="top", wrap_text=True)
+    fills = {k: PatternFill("solid", fgColor=v) for k, v in _GAP_FILL.items()}
     for r, row in enumerate(table.rows, start=2):
         flag = table.flags[r - 2] if r - 2 < len(table.flags) else None
         for c, value in enumerate(row, start=1):
             cell = ws.cell(row=r, column=c)
             set_text(cell, value)
-            cell.alignment = Alignment(vertical="top", wrap_text=True)
+            cell.alignment = wrap
             if flag:
-                cell.fill = PatternFill("solid", fgColor=_GAP_FILL.get(flag, "FCF4D6"))
+                cell.fill = fills.get(flag) or PatternFill("solid", fgColor="FCF4D6")
     style_header(ws, len(table.columns))
     fit_columns(ws, table.columns, table.rows)
     provenance_sheet(wb, table.provenance, table.notes)

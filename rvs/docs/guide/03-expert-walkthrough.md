@@ -21,6 +21,8 @@ The complete list is in *Keyboard shortcuts* at the end of this guide, and in **
 
 In expert mode, double-click a cell (or press F2) to edit it in place. Editable columns: *Title, Type, Status, Priority, Owner, Method, Level*. Enumerated columns open a drop-down with the project's vocabulary; a value outside the vocabulary is refused with a message. Every cell edit is a normal edit: it is saved immediately, checked by the rules and recorded in the item's history. If the item is baselined, RVS asks for the reason first.
 
+![Expert mode: a dense table that can be edited in place](images/items-expert.png)
+
 Show more columns through **View > Columns** or by right-clicking the table header (for example *Parents*, *Statement*, *Document*, *Priority*).
 
 ## Bulk changes with a spreadsheet
@@ -45,4 +47,4 @@ rvs validate my-project --format json --strict
 
 ## Large projects
 
-Opening a project with several thousand items takes a few seconds; RVS keeps a cache in `.rvs-cache` (it is ignored by Git and by Doorstop) so later opens are quicker. The Problems panel and tables remain responsive while exports and project opening run in the background.
+Opening a project with several thousand items takes a couple of seconds (5,000 items: about 2 s the first time, under 1 s afterwards); RVS keeps a cache in `.rvs-cache` (it is ignored by Git and by Doorstop) so later opens are quicker. The Problems panel and tables remain responsive while exports and project opening run in the background.

@@ -121,3 +121,13 @@ def test_cli_guide_command_copies_the_guide(tmp_path: Path):
     out = tmp_path / "guide.html"
     assert main(["guide", "-o", str(out)]) == 0
     assert "Expert walkthrough" in out.read_text(encoding="utf-8")
+
+
+def test_every_guide_image_exists_next_to_the_bundled_guide(built: str):
+    path = guide_path()
+    assert path is not None
+    images = re.findall(r'<img[^>]*src="([^"]+)"', built)
+    assert images, "the guide should show the application"
+    for name in images:
+        assert not name.startswith(("http", "data:")), name
+        assert (path.parent / name).is_file(), f"{name}: run python scripts/build_screenshots.py"

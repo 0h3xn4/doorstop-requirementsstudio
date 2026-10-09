@@ -46,6 +46,7 @@ from rvs_core.exporters.itemsio import ImportReport, apply_import, read_csv, rea
 from rvs_core.exporters.reqif import read_reqif
 from rvs_core.matrices import Provenance
 from rvs_core.validate import ValidationReport
+from rvs_gui import theme as _theme
 from rvs_gui.baseline_dialog import NewBaselineDialog  # noqa: F401
 from rvs_gui.baselines_view import BaselinesView
 from rvs_gui.changes_view import ChangesView
@@ -164,6 +165,7 @@ class MainWindow(QMainWindow):
         self._opening = False
         self._help: HelpViewer | None = None
         self.mode = "guided"
+        self.theme = "light"
         self.actions_by_id: dict[str, QAction] = {}
 
         left = QWidget()
@@ -204,6 +206,7 @@ class MainWindow(QMainWindow):
         self._setup_inline_editing()
         self.statusBar().showMessage("")
         self.set_mode(userconfig.load()["mode"], remember=False)
+        self.set_theme(userconfig.load()["theme"], remember=False, restyle=False)
         self._restore_geometry()
 
     # menus ####################################################################
@@ -274,6 +277,14 @@ class MainWindow(QMainWindow):
             group.addAction(act)
             mode_menu.addAction(act)
         self._action("toggle_mode", "Switch Mode", self.toggle_mode, mode_menu)
+        theme_menu = view_menu.addMenu("Theme")
+        theme_group = QActionGroup(self)
+        for name, label in (("light", "Light"), ("dark", "Dark"), ("system", "Follow the system")):
+            act = QAction(label, self, checkable=True)
+            act.triggered.connect(lambda _c=False, n=name: self.set_theme(n))
+            theme_group.addAction(act)
+            theme_menu.addAction(act)
+            setattr(self, f"action_theme_{name}", act)
         view_menu.addSeparator()
         view_menu.addAction(tree_dock.toggleViewAction())
         view_menu.addAction(self.problems_panel.toggleViewAction())
@@ -719,6 +730,42 @@ class MainWindow(QMainWindow):
         if remember:
             userconfig.update(mode=mode)
 
+    def set_theme(self, name: str, remember: bool = True, restyle: bool = True) -> None:
+        """Light, dark, or follow the desktop. Applies at once and is remembered.
+
+        The application stylesheet is replaced when the program set one at start-up (``create_app``); a window created
+        without it (tests, embedding) is styled on its own, which also keeps the cost to this window's widgets."""
+        _theme.set_theme(name)  # raises ValueError for an unknown name
+        self.theme = name
+        for key in _theme.THEMES:
+            getattr(self, f"action_theme_{key}").setChecked(key == name)
+        if restyle:
+            load_fonts()
+            app = QApplication.instance()
+            if isinstance(app, QApplication) and app.styleSheet():
+                app.setStyleSheet(stylesheet())
+            else:
+                self.setStyleSheet(stylesheet())
+            self._restyle()
+        if remember:
+            userconfig.update(theme=name)
+
+    def _restyle(self) -> None:
+        """Repaint what bakes colours in at creation time."""
+        self.notification.restyle()
+        for view in (self.trace_view, self.vcm_view, self.coverage_view):
+            view.restyle()
+        self.editor.restyle()
+        self.graph_view.refresh()
+        if self.table_model.rowCount():
+            self.table_model.dataChanged.emit(
+                self.table_model.index(0, 0),
+                self.table_model.index(self.table_model.rowCount() - 1, self.table_model.columnCount() - 1),
+            )
+        self.problems_panel.restyle()
+        if self._help is not None:
+            self._help.restyle()
+
     def toggle_mode(self) -> None:
         self.set_mode("guided" if self.mode == "expert" else "expert")
 
@@ -965,6 +1012,7 @@ def create_app(argv: Sequence[str]) -> QApplication:
     app = QApplication.instance() or QApplication(list(argv))
     assert isinstance(app, QApplication)
     load_fonts()
+    _theme.set_theme(userconfig.load()["theme"])
     app.setStyleSheet(stylesheet())
     return app
 

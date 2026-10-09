@@ -45,11 +45,11 @@ COLUMNS = (
 )
 # Cells that expert mode edits in place (they are attributes of the item, not derived values).
 EDITABLE_KEYS = ("title", "type", "status", "priority", "owner", "verify_method", "verify_level")
-SEVERITY_COLOR = {
-    Severity.ERROR: TOKENS["support_error"],
-    Severity.WARNING: TOKENS["support_warning"],
-    Severity.INFO: TOKENS["interactive"],
-}
+_SEVERITY_TOKEN = {Severity.ERROR: "support_error", Severity.WARNING: "support_warning", Severity.INFO: "link"}
+
+
+def severity_color(severity: Severity) -> str:
+    return TOKENS[_SEVERITY_TOKEN[severity]]
 
 
 class ItemTableModel(QAbstractTableModel):
@@ -152,7 +152,7 @@ class ItemTableModel(QAbstractTableModel):
             if e:
                 return QBrush(QColor(TOKENS["support_error"]))
             if w:
-                return QBrush(QColor("#8e6a00"))
+                return QBrush(QColor(TOKENS["warning_text"]))
         if role == Qt.ItemDataRole.ForegroundRole and not item.normative:
             return QBrush(QColor(TOKENS["text_secondary"]))
         return None
@@ -250,7 +250,7 @@ class FindingsModel(QAbstractTableModel):
                 return f.message
             return f.hint
         if role == Qt.ItemDataRole.ForegroundRole and col == 0:
-            return QBrush(QColor(SEVERITY_COLOR[f.severity]))
+            return QBrush(QColor(severity_color(f.severity)))
         if role == Qt.ItemDataRole.ToolTipRole:
             return f"{f.message}\n{f.hint}\n{f.location}".strip()
         return None

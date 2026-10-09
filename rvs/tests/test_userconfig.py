@@ -35,7 +35,7 @@ def test_corrupt_or_unwritable_settings_never_raise(monkeypatch: pytest.MonkeyPa
 def test_settings_hold_no_project_content():
     userconfig.add_recent(Path("/work/projects/sat"))
     data = json.loads((userconfig.config_dir() / "settings.json").read_text())
-    assert set(data) <= {"mode", "recent", "shortcuts", "geometry"}
+    assert set(data) <= {"mode", "recent", "shortcuts", "geometry", "theme"}
 
 
 def test_recent_projects_are_deduplicated_most_recent_first_and_limited():

@@ -34,10 +34,17 @@ from rvs_core.matrices.table import MatrixTable
 from rvs_gui.jobs import run_in_background
 from rvs_gui.matrix_views import MatrixTableModel
 from rvs_gui.session import ProjectSession
+from rvs_gui.theme import TOKENS
 
 WORKING_LABEL = "Working copy"
-_INS = "color:#198038;text-decoration:underline;"
-_DEL = "color:#da1e28;text-decoration:line-through;"
+
+
+def _ins() -> str:
+    return f"color:{TOKENS['diff_ins']};text-decoration:underline;"
+
+
+def _del() -> str:
+    return f"color:{TOKENS['diff_del']};text-decoration:line-through;"
 
 
 def _marked(segments: tuple[tuple[str, str], ...]) -> str:
@@ -45,7 +52,7 @@ def _marked(segments: tuple[tuple[str, str], ...]) -> str:
     for op, text in segments:
         esc = html.escape(text).replace("\n", "<br>")
         out.append(
-            {"insert": f'<span style="{_INS}">{esc}</span>', "delete": f'<span style="{_DEL}">{esc}</span>'}.get(
+            {"insert": f'<span style="{_ins()}">{esc}</span>', "delete": f'<span style="{_del()}">{esc}</span>'}.get(
                 op, esc
             )
         )

@@ -24,12 +24,12 @@ from rvs_gui.session import ProjectSession
 from rvs_gui.theme import TOKENS
 
 NODE_W, NODE_H = 170.0, 54.0
-_EDGE_COLOR = {
-    "parent": "#525252",
-    "verifies": "#24a148",
-    "satisfies": "#0f62fe",
-    "refines": "#8a3ffc",
-    "conflicts-with": "#da1e28",
+_EDGE_TOKEN = {
+    "parent": "edge_parent",
+    "verifies": "edge_verifies",
+    "satisfies": "edge_satisfies",
+    "refines": "edge_refines",
+    "conflicts-with": "edge_conflicts",
 }
 
 
@@ -37,11 +37,12 @@ class NodeItem(QGraphicsRectItem):
     def __init__(self, uid: str, title: str, centre: bool, view: "GraphView") -> None:
         super().__init__(QRectF(-NODE_W / 2, -NODE_H / 2, NODE_W, NODE_H))
         self.uid, self._view = uid, view
-        self.setBrush(QBrush(QColor(TOKENS["layer"] if not centre else "#d0e2ff")))
+        self.setBrush(QBrush(QColor(TOKENS["layer"] if not centre else TOKENS["node_centre"])))
         self.setPen(QPen(QColor(TOKENS["interactive"] if centre else TOKENS["border_strong"]), 2 if centre else 1))
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         head = QGraphicsSimpleTextItem(uid, self)
+        head.setBrush(QBrush(QColor(TOKENS["text"])))
         head.setPos(-NODE_W / 2 + 8, -NODE_H / 2 + 6)
         body = QGraphicsSimpleTextItem(title if len(title) <= 24 else title[:23] + "…", self)
         body.setBrush(QBrush(QColor(TOKENS["text_secondary"])))
@@ -110,7 +111,7 @@ class GraphView(QWidget):
         self._fit()
 
     def _draw_edge(self, a: tuple[float, float], b: tuple[float, float], kind: str) -> None:
-        pen = QPen(QColor(_EDGE_COLOR.get(kind, "#525252")), 1.5)
+        pen = QPen(QColor(TOKENS[_EDGE_TOKEN.get(kind, "edge_parent")]), 1.5)
         start, end = QPointF(*a), QPointF(*b)
         line = QLineF(start, end)
         if line.length() == 0:

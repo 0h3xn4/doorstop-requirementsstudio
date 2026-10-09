@@ -7,12 +7,7 @@ from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QToolButton
 from rvs_core.glossary import find_acronyms
 from rvs_gui.theme import TOKENS
 
-_KIND_COLOR = {
-    "error": TOKENS["support_error"],
-    "warning": TOKENS["support_warning"],
-    "success": TOKENS["support_success"],
-    "info": TOKENS["interactive"],
-}
+_KIND_TOKEN = {"error": "support_error", "warning": "support_warning", "success": "support_success", "info": "link"}
 
 
 class InlineNotification(QFrame):
@@ -39,10 +34,17 @@ class InlineNotification(QFrame):
     def show_message(self, kind: str, text: str) -> None:
         self.kind = kind
         self._label.setText(text)
-        self.setStyleSheet(
-            f"#InlineNotification {{ background: {TOKENS['layer']}; border-left: 4px solid {_KIND_COLOR[kind]}; }}"
-        )
+        self._apply_style()
         self.show()
+
+    def _apply_style(self) -> None:
+        self.setStyleSheet(
+            f"#InlineNotification {{ background: {TOKENS['layer']}; border-left: 4px solid {TOKENS[_KIND_TOKEN[self.kind]]}; }}"
+        )
+
+    def restyle(self) -> None:
+        """Re-apply the colours of the current theme (the message itself is unchanged)."""
+        self._apply_style()
 
     def text(self) -> str:
         return self._label.text()

@@ -175,6 +175,6 @@ def test_gui_edit_and_tab_switch_stay_responsive_at_5000_items(stress: Path, tmp
         timed(f"show tab {win.tabs.tabText(i)}", lambda i=i: win.tabs.setCurrentIndex(i))
     for name, seconds in timings.items():
         print(f"\n{name:34} {seconds:6.2f} s")
-    assert timings["open (cold cache)"] < 12 and timings["open (warm cache)"] < 4
+    assert timings["open (cold cache)"] < 4 and timings["open (warm cache)"] < 2
     assert timings["inline edit of one cell"] < 2.5 and timings["save from the editor"] < 2.5
     assert max(v for k, v in timings.items() if k.startswith("show tab")) < 6

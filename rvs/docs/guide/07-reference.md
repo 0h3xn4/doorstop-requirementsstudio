@@ -75,6 +75,7 @@ Every problem has a stable code, a message and a hint on how to fix it.
 | `RVS-SCHEMA-NOMIGRATION` | A file is older but no migration exists. |
 | `RVS-SCHEMA-NEWER` | A file is from a newer version of RVS and is refused. |
 | `RVS-TREE-INVALID` | The document tree cannot be read by Doorstop. |
+| `RVS-ITEM-UNREADABLE` | An item file cannot be parsed, usually because a hand edit broke the YAML. The message names the file and the line; fix it and open the project again. |
 | `RVS-DOC-MISSING` | A declared document has no folder. |
 | `RVS-DOC-UNDECLARED` | A folder is a Doorstop document but is not declared in `rvs-project.yaml`. |
 | `RVS-DOC-PARENT` | A document's parent differs from the declaration. |

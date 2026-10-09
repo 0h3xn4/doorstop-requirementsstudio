@@ -16,17 +16,17 @@ GUIDE_DIR = ROOT / "docs" / "guide"
 OUTPUT = ROOT / "src" / "rvs_core" / "guide" / "guide.html"
 SHORTCUTS_MARKER = "<!-- shortcuts-table -->"
 
+# Layout only: colours come from the viewer so the guide follows the light or dark theme.
 CSS = """
-body { font-family: 'IBM Plex Sans', sans-serif; font-size: 11pt; color: #161616; margin: 12px 24px; }
-h1 { font-size: 22pt; margin-top: 28px; border-bottom: 1px solid #e0e0e0; }
+body { font-family: 'IBM Plex Sans', sans-serif; font-size: 11pt; margin: 12px 24px; }
+h1 { font-size: 22pt; margin-top: 28px; }
 h2 { font-size: 16pt; margin-top: 20px; }
 h3 { font-size: 13pt; }
-code { font-family: 'IBM Plex Mono', monospace; background-color: #f4f4f4; }
-pre { font-family: 'IBM Plex Mono', monospace; background-color: #f4f4f4; padding: 8px; }
+code { font-family: 'IBM Plex Mono', monospace; }
+pre { font-family: 'IBM Plex Mono', monospace; padding: 8px; }
 table { border-collapse: collapse; }
-th { background-color: #e0e0e0; text-align: left; padding: 4px 8px; }
-td { padding: 4px 8px; border-top: 1px solid #e0e0e0; }
-a { color: #0f62fe; }
+th { text-align: left; padding: 4px 8px; }
+td { padding: 4px 8px; }
 .toc li { margin-bottom: 2px; }
 """
 
@@ -44,7 +44,7 @@ def _toc(tokens: list[dict[str, object]], depth: int = 0) -> str:
     for t in tokens:
         children = t.get("children") or []
         sub = _toc(children, depth + 1) if children and depth < 1 else ""  # type: ignore[arg-type]
-        items.append(f'<li><a href="#{t["id"]}">{html.escape(str(t["name"]))}</a>{sub}</li>')
+        items.append(f'<li><a href="#{t["id"]}">{t["name"]}</a>{sub}</li>')
     return "<ul>" + "".join(items) + "</ul>"
 
 

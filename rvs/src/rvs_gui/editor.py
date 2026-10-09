@@ -154,6 +154,14 @@ class RequirementEditor(QWidget):
         self._help_labels.append(label)
         self.form.addRow("", label)
 
+    def restyle(self) -> None:
+        """Rebuild the form so help labels pick up the colours of the current theme."""
+        if self._item is not None and self.current_uid:
+            dirty = self.is_dirty()
+            if not dirty:
+                self._rebuild_form(self._item)
+                self.load(self.current_uid)
+
     def help_visible(self) -> bool:
         return self._help_visible
 

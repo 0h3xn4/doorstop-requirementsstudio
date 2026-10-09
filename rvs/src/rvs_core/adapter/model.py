@@ -11,6 +11,10 @@ class ProjectError(Exception):
     """A project operation failed; the message says what, where and what to do."""
 
 
+class UnreadableItemError(ProjectError):
+    """An item or document file cannot be parsed (typically a hand-edit that broke the YAML)."""
+
+
 @dataclass(frozen=True)
 class DocumentInfo:
     prefix: str

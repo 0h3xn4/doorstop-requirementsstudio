@@ -1,18 +1,17 @@
 <!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><title>Requirements &amp; Verification Studio: user guide</title><style>
-body { font-family: 'IBM Plex Sans', sans-serif; font-size: 11pt; color: #161616; margin: 12px 24px; }
-h1 { font-size: 22pt; margin-top: 28px; border-bottom: 1px solid #e0e0e0; }
+body { font-family: 'IBM Plex Sans', sans-serif; font-size: 11pt; margin: 12px 24px; }
+h1 { font-size: 22pt; margin-top: 28px; }
 h2 { font-size: 16pt; margin-top: 20px; }
 h3 { font-size: 13pt; }
-code { font-family: 'IBM Plex Mono', monospace; background-color: #f4f4f4; }
-pre { font-family: 'IBM Plex Mono', monospace; background-color: #f4f4f4; padding: 8px; }
+code { font-family: 'IBM Plex Mono', monospace; }
+pre { font-family: 'IBM Plex Mono', monospace; padding: 8px; }
 table { border-collapse: collapse; }
-th { background-color: #e0e0e0; text-align: left; padding: 4px 8px; }
-td { padding: 4px 8px; border-top: 1px solid #e0e0e0; }
-a { color: #0f62fe; }
+th { text-align: left; padding: 4px 8px; }
+td { padding: 4px 8px; }
 .toc li { margin-bottom: 2px; }
 </style></head><body>
-<div class="toc"><h2>Contents</h2><ul><li><a href="#requirements-verification-studio">Requirements &amp;amp; Verification Studio</a><ul><li><a href="#getting-started">Getting started</a></li><li><a href="#installation-and-checks">Installation and checks</a></li></ul></li><li><a href="#guided-walkthrough">Guided walkthrough</a><ul><li><a href="#1-find-your-way-around">1. Find your way around</a></li><li><a href="#2-write-a-new-requirement">2. Write a new requirement</a></li><li><a href="#3-edit-an-existing-requirement">3. Edit an existing requirement</a></li><li><a href="#4-fix-problems">4. Fix problems</a></li><li><a href="#5-see-the-whole-picture">5. See the whole picture</a></li><li><a href="#6-produce-documents">6. Produce documents</a></li><li><a href="#7-control-changes">7. Control changes</a></li></ul></li><li><a href="#expert-walkthrough">Expert walkthrough</a><ul><li><a href="#work-from-the-keyboard">Work from the keyboard</a></li><li><a href="#edit-in-the-table">Edit in the table</a></li><li><a href="#bulk-changes-with-a-spreadsheet">Bulk changes with a spreadsheet</a></li><li><a href="#scripting-and-automation">Scripting and automation</a></li><li><a href="#large-projects">Large projects</a></li></ul></li><li><a href="#change-control">Change control</a><ul><li><a href="#change-requests">Change requests</a></li><li><a href="#reasons-for-change">Reasons for change</a></li><li><a href="#baselines">Baselines</a></li><li><a href="#comparing-versions">Comparing versions</a></li><li><a href="#suspect-links">Suspect links</a></li></ul></li><li><a href="#import-and-export">Import and export</a><ul><li><a href="#what-can-be-exported">What can be exported</a></li><li><a href="#importing-items">Importing items</a></li><li><a href="#reqif-exchange">ReqIF exchange</a></li></ul></li><li><a href="#command-reference">Command reference</a><ul><li><a href="#rvs-validate">rvs validate</a></li><li><a href="#rvs-init">rvs init</a></li><li><a href="#rvs-export">rvs export</a></li><li><a href="#rvs-import">rvs import</a></li><li><a href="#rvs-cr">rvs cr</a></li><li><a href="#rvs-baseline">rvs baseline</a></li><li><a href="#rvs-diff">rvs diff</a></li><li><a href="#rvs-selftest">rvs selftest</a></li><li><a href="#rvs-guide">rvs guide</a></li><li><a href="#rvs-version">rvs --version</a></li></ul></li><li><a href="#reference">Reference</a><ul><li><a href="#keyboard-shortcuts">Keyboard shortcuts</a></li><li><a href="#project-files-and-format">Project files and format</a></li><li><a href="#configuration-files">Configuration files</a></li><li><a href="#quality-rules">Quality rules</a></li><li><a href="#finding-codes">Finding codes</a></li><li><a href="#troubleshooting">Troubleshooting</a></li></ul></li></ul></div>
+<div class="toc"><h2>Contents</h2><ul><li><a href="#requirements-verification-studio">Requirements &amp; Verification Studio</a><ul><li><a href="#getting-started">Getting started</a></li><li><a href="#installation-and-checks">Installation and checks</a></li></ul></li><li><a href="#guided-walkthrough">Guided walkthrough</a><ul><li><a href="#1-find-your-way-around">1. Find your way around</a></li><li><a href="#2-write-a-new-requirement">2. Write a new requirement</a></li><li><a href="#3-edit-an-existing-requirement">3. Edit an existing requirement</a></li><li><a href="#4-fix-problems">4. Fix problems</a></li><li><a href="#5-see-the-whole-picture">5. See the whole picture</a></li><li><a href="#6-produce-documents">6. Produce documents</a></li><li><a href="#7-control-changes">7. Control changes</a></li></ul></li><li><a href="#expert-walkthrough">Expert walkthrough</a><ul><li><a href="#work-from-the-keyboard">Work from the keyboard</a></li><li><a href="#edit-in-the-table">Edit in the table</a></li><li><a href="#bulk-changes-with-a-spreadsheet">Bulk changes with a spreadsheet</a></li><li><a href="#scripting-and-automation">Scripting and automation</a></li><li><a href="#large-projects">Large projects</a></li></ul></li><li><a href="#change-control">Change control</a><ul><li><a href="#change-requests">Change requests</a></li><li><a href="#reasons-for-change">Reasons for change</a></li><li><a href="#baselines">Baselines</a></li><li><a href="#comparing-versions">Comparing versions</a></li><li><a href="#suspect-links">Suspect links</a></li></ul></li><li><a href="#import-and-export">Import and export</a><ul><li><a href="#what-can-be-exported">What can be exported</a></li><li><a href="#importing-items">Importing items</a></li><li><a href="#reqif-exchange">ReqIF exchange</a></li></ul></li><li><a href="#command-reference">Command reference</a><ul><li><a href="#rvs-validate">rvs validate</a></li><li><a href="#rvs-init">rvs init</a></li><li><a href="#rvs-export">rvs export</a></li><li><a href="#rvs-import">rvs import</a></li><li><a href="#rvs-cr">rvs cr</a></li><li><a href="#rvs-baseline">rvs baseline</a></li><li><a href="#rvs-diff">rvs diff</a></li><li><a href="#rvs-selftest">rvs selftest</a></li><li><a href="#rvs-guide">rvs guide</a></li><li><a href="#rvs-version">rvs --version</a></li></ul></li><li><a href="#reference">Reference</a><ul><li><a href="#keyboard-shortcuts">Keyboard shortcuts</a></li><li><a href="#project-files-and-format">Project files and format</a></li><li><a href="#configuration-files">Configuration files</a></li><li><a href="#quality-rules">Quality rules</a></li><li><a href="#finding-codes">Finding codes</a></li><li><a href="#troubleshooting">Troubleshooting</a></li></ul></li></ul></div>
 <a name="requirements-verification-studio"></a><h1 id="requirements-verification-studio">Requirements &amp; Verification Studio</h1>
 <p>This guide is part of the application and works without a network connection. Press <strong>F1</strong> in the application to open it. The same text is available on the command line with <code>rvs guide</code>.</p>
 <p>Requirements &amp; Verification Studio (RVS) manages requirements and their verification for engineering projects, with traceability, change control and baselines. Your data is stored as plain text files in a folder, so it can be kept under Git and read without RVS.</p>
@@ -29,6 +28,7 @@ a { color: #0f62fe; }
 </ol>
 <p>The same from the command line: <code>rvs init my-project --name "My project" --template satellite --git</code>.</p>
 <a name="the-window"></a><h3 id="the-window">The window</h3>
+<p><img alt="The Items tab in guided mode: documents on the left, items in the middle, the editor on the right, problems at the bottom" src="images/items-guided.png" /></p>
 <ul>
 <li><strong>Documents</strong> (left): the document tree. Click a document to filter the item table; click an item to open it.</li>
 <li><strong>Items</strong> tab: the table of items on the left, the editor on the right.</li>
@@ -65,6 +65,9 @@ a { color: #0f62fe; }
 </tbody>
 </table>
 <p>Both modes use the same data and the same rules; nothing is hidden in guided mode.</p>
+<a name="light-and-dark-theme"></a><h3 id="light-and-dark-theme">Light and dark theme</h3>
+<p><strong>View &gt; Theme</strong> switches between a light theme, a dark theme and <em>Follow the system</em>. The choice is remembered.</p>
+<p><img alt="The dark theme" src="images/items-dark.png" /></p>
 <a name="help-from-the-application"></a><h3 id="help-from-the-application">Help from the application</h3>
 <ul>
 <li><strong>F1</strong> opens this guide. <strong>Ctrl+/</strong> lists all keyboard shortcuts.</li>
@@ -94,6 +97,8 @@ a { color: #0f62fe; }
 <li><strong>How will you show it is met?</strong> Tick <em>Also create a planned verification item</em> to create a linked verification item in the verification plan, using the method and level from the previous step.</li>
 <li><strong>Review.</strong> A summary of what will be created and everything the rules found. Click <em>Finish</em> to create the requirement; you can fix remaining hints later in the editor.</li>
 </ol>
+<p><img alt="The wizard's first step: choose the document and tick the parent requirement" src="images/wizard-where.png" /></p>
+<p><img alt="The statement step: quality hints appear while you type" src="images/wizard-statement.png" /></p>
 <p>The new item is selected in the editor and a green message names the IDs that were created.</p>
 <a name="3-edit-an-existing-requirement"></a><h2 id="3-edit-an-existing-requirement">3. Edit an existing requirement</h2>
 <p>Select an item, change fields or the statement (the preview shows the formatted Markdown), and press <strong>Ctrl+S</strong>. <strong>Ctrl+R</strong> reverts.</p>
@@ -107,10 +112,18 @@ a { color: #0f62fe; }
 <p>Open the Problems panel. Each row has a code, the item, a message and <strong>How to fix</strong>. Examples: <code>RVS-RULE-SHALL-PRESENT</code> (add "shall"), <code>RVS-LINK-SUSPECT</code> (a parent changed; review and clear), <code>RVS-RULE-UNDEFINED-ACRONYM</code> (add the acronym to the glossary with <strong>Project &gt; Glossary and Acronyms…</strong>, Ctrl+Shift+G). <em>Run Full Doorstop Validation</em> (Ctrl+Shift+V) additionally runs Doorstop's own tree checks.</p>
 <a name="5-see-the-whole-picture"></a><h2 id="5-see-the-whole-picture">5. See the whole picture</h2>
 <ul>
-<li><strong>Traceability</strong> shows which items of one document are linked from another, in both directions.</li>
-<li><strong>VCM</strong> lists every requirement with its verification method, level and the verification items that cover it. Rows with gaps are shaded. Filter by document, method, level or status.</li>
+<li>
+<p><strong>Traceability</strong> shows which items of one document are linked from another, in both directions.
+<img alt="The verification control matrix" src="images/vcm.png" /></p>
+</li>
+<li>
+<p><strong>VCM</strong> lists every requirement with its verification method, level and the verification items that cover it. Rows with gaps are shaded. Filter by document, method, level or status.</p>
+</li>
 <li><strong>Coverage</strong> shows, per document, how many requirements have children and verification.</li>
 <li><strong>Graph</strong> draws the neighbourhood of the selected item.</li>
+</ul>
+<p><img alt="The graph of one requirement: its parent above, its verification item below" src="images/graph.png" /></p>
+<ul>
 <li>The <strong>Impact</strong> panel lists everything that depends on the selected item, so you can see what a change would touch.</li>
 </ul>
 <a name="6-produce-documents"></a><h2 id="6-produce-documents">6. Produce documents</h2>
@@ -165,6 +178,7 @@ a { color: #0f62fe; }
 <p>The complete list is in <em>Keyboard shortcuts</em> at the end of this guide, and in <strong>Help &gt; Keyboard Shortcuts</strong>. To change a shortcut, add it under <code>"shortcuts"</code> in <code>settings.json</code>, for example <code>{"shortcuts": {"export": "Ctrl+Alt+E"}}</code>.</p>
 <a name="edit-in-the-table"></a><h2 id="edit-in-the-table">Edit in the table</h2>
 <p>In expert mode, double-click a cell (or press F2) to edit it in place. Editable columns: <em>Title, Type, Status, Priority, Owner, Method, Level</em>. Enumerated columns open a drop-down with the project's vocabulary; a value outside the vocabulary is refused with a message. Every cell edit is a normal edit: it is saved immediately, checked by the rules and recorded in the item's history. If the item is baselined, RVS asks for the reason first.</p>
+<p><img alt="Expert mode: a dense table that can be edited in place" src="images/items-expert.png" /></p>
 <p>Show more columns through <strong>View &gt; Columns</strong> or by right-clicking the table header (for example <em>Parents</em>, <em>Statement</em>, <em>Document</em>, <em>Priority</em>).</p>
 <a name="bulk-changes-with-a-spreadsheet"></a><h2 id="bulk-changes-with-a-spreadsheet">Bulk changes with a spreadsheet</h2>
 <p>For changes to many items, export the items table, edit it in Excel and import it:</p>
@@ -178,7 +192,7 @@ rvs import my-project items.xlsx --reason &quot;Re-numbered after review&quot;
 <pre><code>rvs validate my-project --format json --strict
 </code></pre>
 <a name="large-projects"></a><h2 id="large-projects">Large projects</h2>
-<p>Opening a project with several thousand items takes a few seconds; RVS keeps a cache in <code>.rvs-cache</code> (it is ignored by Git and by Doorstop) so later opens are quicker. The Problems panel and tables remain responsive while exports and project opening run in the background.</p>
+<p>Opening a project with several thousand items takes a couple of seconds (5,000 items: about 2 s the first time, under 1 s afterwards); RVS keeps a cache in <code>.rvs-cache</code> (it is ignored by Git and by Doorstop) so later opens are quicker. The Problems panel and tables remain responsive while exports and project opening run in the background.</p>
 <a name="change-control"></a><h1 id="change-control">Change control</h1>
 <p>RVS supports a light configuration-management workflow: change requests that record why things changed, baselines that freeze an agreed state, and a comparison between any two states.</p>
 <a name="change-requests"></a><h2 id="change-requests">Change requests</h2>
@@ -627,6 +641,10 @@ rvs import my-project items.xlsx --reason &quot;Re-numbered after review&quot;
 <tr>
 <td><code>RVS-TREE-INVALID</code></td>
 <td>The document tree cannot be read by Doorstop.</td>
+</tr>
+<tr>
+<td><code>RVS-ITEM-UNREADABLE</code></td>
+<td>An item file cannot be parsed, usually because a hand edit broke the YAML. The message names the file and the line; fix it and open the project again.</td>
 </tr>
 <tr>
 <td><code>RVS-DOC-MISSING</code></td>

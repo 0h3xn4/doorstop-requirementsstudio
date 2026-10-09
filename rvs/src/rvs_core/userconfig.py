@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-DEFAULTS: dict[str, Any] = {"mode": "guided", "recent": [], "shortcuts": {}, "geometry": ""}
+DEFAULTS: dict[str, Any] = {"mode": "guided", "recent": [], "shortcuts": {}, "geometry": "", "theme": "light"}
 MAX_RECENT = 8
 
 
@@ -35,6 +35,8 @@ def load() -> dict[str, Any]:
         pass
     if data["mode"] not in ("guided", "expert"):
         data["mode"] = "guided"
+    if data["theme"] not in ("light", "dark", "system"):
+        data["theme"] = "light"
     return data
 
 

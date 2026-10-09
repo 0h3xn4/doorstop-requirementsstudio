@@ -24,6 +24,8 @@ The same from the command line: `rvs init my-project --name "My project" --templ
 
 ### The window
 
+![The Items tab in guided mode: documents on the left, items in the middle, the editor on the right, problems at the bottom](images/items-guided.png)
+
 - **Documents** (left): the document tree. Click a document to filter the item table; click an item to open it.
 - **Items** tab: the table of items on the left, the editor on the right.
 - **Problems** (bottom): everything the project's quality rules and link checks found. Double-click a row to jump to the item.
@@ -41,6 +43,12 @@ RVS starts in **guided mode**: a step-by-step wizard for new requirements, a lin
 | Item table | Read-only, comfortable rows | Dense rows, edit cells in place |
 
 Both modes use the same data and the same rules; nothing is hidden in guided mode.
+
+### Light and dark theme
+
+**View > Theme** switches between a light theme, a dark theme and *Follow the system*. The choice is remembered.
+
+![The dark theme](images/items-dark.png)
 
 ### Help from the application
 

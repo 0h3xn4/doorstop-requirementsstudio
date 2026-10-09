@@ -18,6 +18,10 @@ Press **Ctrl+N** (or **Item > New Requirement…**). The wizard has five steps:
 4. **How will you show it is met?** Tick *Also create a planned verification item* to create a linked verification item in the verification plan, using the method and level from the previous step.
 5. **Review.** A summary of what will be created and everything the rules found. Click *Finish* to create the requirement; you can fix remaining hints later in the editor.
 
+![The wizard's first step: choose the document and tick the parent requirement](images/wizard-where.png)
+
+![The statement step: quality hints appear while you type](images/wizard-statement.png)
+
 The new item is selected in the editor and a green message names the IDs that were created.
 
 ## 3. Edit an existing requirement
@@ -36,9 +40,14 @@ Open the Problems panel. Each row has a code, the item, a message and **How to f
 ## 5. See the whole picture
 
 - **Traceability** shows which items of one document are linked from another, in both directions.
+![The verification control matrix](images/vcm.png)
+
 - **VCM** lists every requirement with its verification method, level and the verification items that cover it. Rows with gaps are shaded. Filter by document, method, level or status.
 - **Coverage** shows, per document, how many requirements have children and verification.
 - **Graph** draws the neighbourhood of the selected item.
+
+![The graph of one requirement: its parent above, its verification item below](images/graph.png)
+
 - The **Impact** panel lists everything that depends on the selected item, so you can see what a change would touch.
 
 ## 6. Produce documents

@@ -65,6 +65,12 @@ class ProblemsPanel(QDockWidget):
         self.setWidget(body)
         self.view.doubleClicked.connect(self._on_double_click)
 
+    def restyle(self) -> None:
+        if self.model_.rowCount():
+            self.model_.dataChanged.emit(
+                self.model_.index(0, 0), self.model_.index(self.model_.rowCount() - 1, self.model_.columnCount() - 1)
+            )
+
     def set_findings(self, findings: list[Finding]) -> None:
         self.model_.set_findings(findings)
         self.view.sortByColumn(0, Qt.SortOrder.AscendingOrder)

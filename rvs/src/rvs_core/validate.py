@@ -6,7 +6,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-from rvs_core.adapter import DocumentInfo, DoorstopProject, ItemData, ProjectError
+from rvs_core.adapter import DocumentInfo, DoorstopProject, ItemData, ProjectError, UnreadableItemError
 from rvs_core.changecontrol.baselines import BaselineError, verify_baseline
 from rvs_core.changecontrol.changes import ChangeRequestError, ChangeRequestStore, validate_change_requests
 from rvs_core.changecontrol.manifests import manifest_names
@@ -27,6 +27,7 @@ FATAL_CODES = frozenset(
         "RVS-CONFIG-INVALID",
         "RVS-CONFIG-YAML",
         "RVS-TREE-INVALID",
+        "RVS-ITEM-UNREADABLE",
     }
 )
 _UID = re.compile(r"^[A-Z][A-Z0-9]*-\d+$")
@@ -317,6 +318,12 @@ def validate_project(root: Path, *, strict: bool = False, doorstop: bool = True)
         docs = project.documents()
         items = project.items()
         issues = project.issues() if doorstop else []
+    except UnreadableItemError as exc:
+        return _fatal(
+            "RVS-ITEM-UNREADABLE",
+            str(exc),
+            "Fix the YAML syntax of the file named above (a recent hand edit is the usual cause; 'git diff' shows it), then open the project again.",
+        )
     except ProjectError as exc:
         return _fatal("RVS-TREE-INVALID", str(exc), "Run 'doorstop' in the project folder for details.")
 

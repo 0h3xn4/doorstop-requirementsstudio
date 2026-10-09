@@ -34,7 +34,7 @@ from rvs_gui.models import Index
 from rvs_gui.session import ProjectSession
 from rvs_gui.theme import TOKENS
 
-_GAP_COLOR = {"unverified-approved": "#ffd7d9", "unverified": "#fcf4d6", "childless": "#fcf4d6", "orphan": "#ffd7d9"}
+_GAP_TOKEN = {"unverified-approved": "gap_error", "orphan": "gap_error"}  # every other flag is a warning
 
 
 class MatrixTableModel(QAbstractTableModel):
@@ -65,7 +65,7 @@ class MatrixTableModel(QAbstractTableModel):
             return self.matrix.rows[index.row()][index.column()]
         flag = self.matrix.flags[index.row()]
         if role == Qt.ItemDataRole.BackgroundRole and flag:
-            return QBrush(QColor(_GAP_COLOR.get(flag, "#fcf4d6")))
+            return QBrush(QColor(TOKENS[_GAP_TOKEN.get(flag, "gap_warn")]))
         if role == Qt.ItemDataRole.ToolTipRole and flag:
             return f"Gap: {flag}"
         return None
@@ -104,6 +104,10 @@ class MatrixView(QWidget):
         self.table.horizontalHeader().setResizeContentsPrecision(100)  # size columns from the first rows, not all 5,000
         self._stale = False
         session.loaded.connect(self._on_session_loaded)
+
+    def restyle(self) -> None:
+        self.provenance_label.setStyleSheet(f"color: {TOKENS['text_secondary']};")
+        self.model.layoutChanged.emit()
 
     def _on_session_loaded(self) -> None:
         """Rebuild now if the tab is on screen, otherwise when it is next shown (a tab nobody looks at costs nothing)."""

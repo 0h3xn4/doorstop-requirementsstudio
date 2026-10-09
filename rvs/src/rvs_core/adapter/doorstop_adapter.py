@@ -9,12 +9,14 @@ from pathlib import Path
 from typing import Any
 
 import doorstop
+import yaml
+from doorstop import common as _doorstop_common
 from doorstop import settings as _settings
 from doorstop.common import DoorstopError, DoorstopInfo, DoorstopWarning
 from doorstop.core import builder
 
 from rvs_core.adapter.cache import CacheStats, ItemCache, is_racy, stat_key
-from rvs_core.adapter.model import DocumentInfo, Issue, ItemData, ProjectError
+from rvs_core.adapter.model import DocumentInfo, Issue, ItemData, ProjectError, UnreadableItemError
 from rvs_core.findings import Finding
 from rvs_core.schema.versioning import CURRENT_VERSION, VERSION_KEY
 
@@ -30,6 +32,12 @@ _settings.REVIEW_NEW_ITEMS = False
 # Doorstop would otherwise run `git add/rm` through a subprocess on every save when the project is in a Git
 # repository: it needs a `git` executable, and it uses the process's working directory, not the project's repository.
 _settings.ADDREMOVE_FILES = False
+
+# Doorstop parses every item with PyYAML's pure-Python SafeLoader; libyaml's C parser reads the same documents about
+# three times faster (cold open of 5,000 items: 6.6 s -> 2.0 s, DEVIATIONS V14). Same data model; tests compare both
+# loaders on every example item. Without libyaml (some platforms) Doorstop's default stays.
+if getattr(yaml, "CSafeLoader", None) is not None:
+    _doorstop_common.load_yaml.__defaults__ = (yaml.CSafeLoader,)
 
 # Doorstop item fields that are not RVS extended attributes.
 _CORE_FIELDS = frozenset({"level", "active", "normative", "derived", "reviewed", "text", "ref", "links", "header"})
@@ -170,7 +178,10 @@ class DoorstopProject:
 
     def items(self, prefix: str | None = None) -> list[ItemData]:
         docs = [self._doc(prefix)] if prefix else sorted(self._tree, key=lambda d: str(d.prefix))
-        return [item for d in docs for item in self._items_of(d)]
+        try:
+            return [item for d in docs for item in self._items_of(d)]
+        except DoorstopError as exc:
+            raise UnreadableItemError(f"An item file cannot be read. {str(exc).strip()}") from None
 
     def _item_files(self, doc_dir: Path) -> list[Path]:
         """Item files of a document the way Doorstop finds them (recursive, embedded documents skipped)."""

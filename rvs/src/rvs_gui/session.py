@@ -9,6 +9,8 @@ from PySide6.QtCore import QObject, Signal
 
 from rvs_core.adapter import DocumentInfo, ItemData
 from rvs_core.authoring import EditService
+from rvs_core.changecontrol.baselines import current_label
+from rvs_core.changecontrol.changes import ChangeRequest, ChangeRequestError, ChangeRequestStore
 from rvs_core.config import ProjectConfig
 from rvs_core.findings import Finding, Severity
 from rvs_core.trace import LinkGraph
@@ -18,6 +20,7 @@ from rvs_core.validate import ValidationReport, validate_project
 class ProjectSession(QObject):
     loaded = Signal()  # a project was opened or fully refreshed
     item_changed = Signal(str)  # uid of the item that was created or edited (after refresh)
+    active_cr_changed = Signal(object)  # change request id or None
 
     def __init__(self, parent: QObject | None = None, user: str | None = None) -> None:
         super().__init__(parent)
@@ -29,6 +32,8 @@ class ProjectSession(QObject):
         self.graph: LinkGraph | None = None
         self.report: ValidationReport | None = None
         self.user = user
+        self.active_cr: str | None = None
+        self.baseline_label = "working copy"
         self._by_uid: dict[str, ItemData] = {}
         self._findings_by_uid: dict[str, list[Finding]] = {}
 
@@ -68,6 +73,10 @@ class ProjectSession(QObject):
         self.items = sorted(report.items, key=lambda i: (self._doc_order(i.document), i.level_key, i.uid))
         self._by_uid = {i.uid: i for i in self.items}
         self.findings = report.findings
+        try:
+            self.baseline_label = current_label(self.root)
+        except Exception:  # noqa: BLE001 - the label is cosmetic; never block loading on it
+            self.baseline_label = "working copy"
         grouped: dict[str, list[Finding]] = defaultdict(list)
         for f in self.findings:
             if f.uid:
@@ -97,7 +106,7 @@ class ProjectSession(QObject):
     # edits ####################################################################
     def _service(self) -> EditService:
         assert self.root is not None
-        return EditService(self.root, user=self.user)
+        return EditService(self.root, user=self.user, change_request=self.active_cr)
 
     def update_item(
         self, uid: str, *, text: str | None = None, attrs: Mapping[str, Any] | None = None, why: str = ""
@@ -145,6 +154,27 @@ class ProjectSession(QObject):
     def documents_of_kind(self, kind: str) -> list[str]:
         assert self.cfg is not None
         return [d.prefix for d in self.cfg.project.documents if d.kind == kind]
+
+    # change requests ###########################################################
+    def store(self) -> ChangeRequestStore:
+        assert self.root is not None and self.cfg is not None
+        return ChangeRequestStore(self.root, self.cfg)
+
+    def change_requests(self) -> list[ChangeRequest]:
+        return self.store().list() if self.root else []
+
+    def change_request(self, cr_id: str) -> ChangeRequest | None:
+        try:
+            return self.store().get(cr_id)
+        except ChangeRequestError:
+            return None
+
+    def set_active_cr(self, cr_id: str | None) -> None:
+        """Attribute the user's edits to ``cr_id``; raises ValueError if it is unknown or no longer open."""
+        if cr_id:
+            EditService(self.root, user=self.user, change_request=cr_id)  # type: ignore[arg-type]  # validates
+        self.active_cr = cr_id
+        self.active_cr_changed.emit(cr_id)
 
     def counts_for(self, uid: str) -> tuple[int, int, int]:
         fs = self.findings_for(uid)

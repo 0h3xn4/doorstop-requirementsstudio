@@ -29,7 +29,11 @@ import rvs_core
 from rvs_core.exporters.export_request import ExportRequest, build_output
 from rvs_core.exporters.itemsio import ImportReport, apply_import, read_csv, read_xlsx
 from rvs_core.matrices import Provenance
+from rvs_gui.baseline_dialog import NewBaselineDialog  # noqa: F401
+from rvs_gui.baselines_view import BaselinesView
+from rvs_gui.changes_view import ChangesView
 from rvs_gui.dialogs import NewItemDialog
+from rvs_gui.diff_view import DiffView
 from rvs_gui.doctree import DocumentTree
 from rvs_gui.editor import RequirementEditor
 from rvs_gui.export_dialog import ExportDialog
@@ -103,6 +107,9 @@ class MainWindow(QMainWindow):
         self.vcm_view = VcmView(self.session)
         self.coverage_view = CoverageView(self.session)
         self.graph_view = GraphView(self.session)
+        self.changes_view = ChangesView(self.session)
+        self.baselines_view = BaselinesView(self.session)
+        self.diff_view = DiffView(self.session)
         self.graph_view.on_node_clicked = self.select_item
         self._syncing = False
 
@@ -122,6 +129,9 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.vcm_view, "VCM")
         self.tabs.addTab(self.coverage_view, "Coverage")
         self.tabs.addTab(self.graph_view, "Graph")
+        self.tabs.addTab(self.changes_view, "Changes")
+        self.tabs.addTab(self.baselines_view, "Baselines")
+        self.tabs.addTab(self.diff_view, "Diff")
         central = QWidget()
         lay = QVBoxLayout(central)
         lay.addWidget(self.notification)
@@ -176,6 +186,10 @@ class MainWindow(QMainWindow):
         self.action_full = QAction("Run Full Doorstop Validation", self)
         self.action_full.triggered.connect(self.run_full_validation)
         project_menu.addActions([self.action_refresh, self.action_full])
+        project_menu.addSeparator()
+        self.action_baseline = QAction("New Baseline…", self)
+        self.action_baseline.triggered.connect(self.baselines_view.new_baseline_dialog)
+        project_menu.addAction(self.action_baseline)
 
         view_menu = bar.addMenu("View")
         view_menu.addAction(tree_dock.toggleViewAction())
@@ -199,6 +213,11 @@ class MainWindow(QMainWindow):
         self.session.loaded.connect(self._on_loaded)
         self.session.item_changed.connect(self._on_item_changed)
         self.editor.message.connect(self.notification.show_message)
+        for cc_view in (self.changes_view, self.baselines_view, self.diff_view):
+            cc_view.message.connect(self.notification.show_message)
+        self.diff_view.export_done.connect(self.export_done)
+        self.baselines_view.compare_requested.connect(self._compare_from_baseline)
+        self.session.active_cr_changed.connect(lambda _c: self.statusBar().showMessage(self._status_text()))
         for view in (self.trace_view, self.vcm_view, self.coverage_view):
             view.message.connect(self.notification.show_message)
             view.export_done.connect(self.export_done)
@@ -273,7 +292,8 @@ class MainWindow(QMainWindow):
         e = sum(1 for f in s.findings if f.severity.value == "error")
         w = sum(1 for f in s.findings if f.severity.value == "warning")
         dirty = " · unsaved changes" if self.editor.is_dirty() else ""
-        return f"{len(s.items)} items · {e} errors · {w} warnings{dirty}"
+        cr = f" · editing under {s.active_cr}" if s.active_cr else ""
+        return f"{len(s.items)} items · {e} errors · {w} warnings{cr}{dirty}"
 
     # model refresh ############################################################
     def _on_loaded(self) -> None:
@@ -316,10 +336,10 @@ class MainWindow(QMainWindow):
         if s.cfg is None or s.graph is None:
             self.notification.show_message("info", "Open a project first.")
             return
-        cfg, items, graph, user = s.cfg, list(s.items), s.graph, s.user
+        cfg, items, graph, user, label = s.cfg, list(s.items), s.graph, s.user, s.baseline_label
 
         def work() -> str:
-            data = build_output(request, cfg, items, graph, Provenance.now(cfg, user=user))
+            data = build_output(request, cfg, items, graph, Provenance.now(cfg, user=user, baseline=label))
             path.write_bytes(data)
             return str(path)
 
@@ -394,6 +414,11 @@ class MainWindow(QMainWindow):
                 + (f", {report.errors} skipped." if report.errors else "."),
             )
         return report
+
+    def _compare_from_baseline(self, name: str) -> None:
+        self.diff_view.set_range(name, None)
+        self.tabs.setCurrentWidget(self.diff_view)
+        self.diff_view.compare()
 
     def run_full_validation(self) -> None:
         if self.session.cfg is None:

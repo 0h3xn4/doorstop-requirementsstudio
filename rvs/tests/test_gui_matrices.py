@@ -26,7 +26,7 @@ def _cells(model, col: int = 0) -> list[str]:  # type: ignore[no-untyped-def]
 
 def test_tabs_exist_and_items_is_first(win: MainWindow):
     names = [win.tabs.tabText(i) for i in range(win.tabs.count())]
-    assert names == ["Items", "Traceability", "VCM", "Coverage", "Graph"]
+    assert names[:5] == ["Items", "Traceability", "VCM", "Coverage", "Graph"]
     assert win.tabs.currentIndex() == 0
 
 

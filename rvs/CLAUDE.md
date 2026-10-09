@@ -12,6 +12,7 @@ Spec: `docs/SPEC.md`. Design: `docs/ARCHITECTURE.md`. Plan: `docs/PLAN.md`. Deci
 - Performance: `python scripts/gen_stress.py <dir>` then `RVS_STRESS_DIR=<dir> pytest -m perf -s`
 - Export formats: `rvs export <project> --vcm|--trace|--coverage|--impact|--items|--spec --format csv|json|xlsx|html|docx|pdf -o FILE` (binary formats need -o); import: `rvs import <project> items.xlsx [--dry-run] [--reason ...]`
 - Goldens: `PYTHONPATH=tests python scripts/gen_goldens.py` after an intentional output change (review the diff)
+- Change control: `rvs cr new|list|show|status|defer`, `rvs baseline create|list|verify`, `rvs diff <project> <baseline|working> <baseline|working> [--format ...]`, `rvs export --baseline NAME`, `rvs import --cr CR-0001`
 - Package: `pyinstaller packaging/rvs.spec --noconfirm` → `dist/rvs-studio/`
 - SBOM + licences (runtime install only): `sh scripts/sbom.sh`
 - Offline wheelhouse: `sh scripts/build_wheelhouse.sh`
@@ -30,3 +31,5 @@ Spec: `docs/SPEC.md`. Design: `docs/ARCHITECTURE.md`. Plan: `docs/PLAN.md`. Deci
 - Item reads may be served from `.rvs-cache/` (D43); anything that edits item files outside the adapter must be at least 2 s old before re-reading in tests (see tests/test_cache.py).
 - Outputs: build a `MatrixTable` or `Doc` and render it; never hand-write XLSX/DOCX/PDF bytes elsewhere. Set cells with `xlsx_out.set_text` (no formulas). Anything that must be reproducible takes its timestamp from `Provenance`.
 - Background work in the GUI goes through `rvs_gui/jobs.run_in_background`.
+- Git access only through `rvs_core/vcs/git.py` (dulwich; never signs, never touches remotes). Doorstop's own git calls are disabled (V18); do not re-enable `ADDREMOVE_FILES`.
+- Anything under `.rvs-cache/` must stay invisible to Doorstop (`.doorstop.skip-all`) and to Git (`.gitignore`).

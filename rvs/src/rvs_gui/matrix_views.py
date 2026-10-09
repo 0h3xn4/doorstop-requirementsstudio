@@ -128,7 +128,7 @@ class MatrixView(QWidget):
 
     def provenance(self) -> Provenance:
         assert self.session.cfg is not None
-        return Provenance.now(self.session.cfg, user=self.session.user)
+        return Provenance.now(self.session.cfg, user=self.session.user, baseline=self.session.baseline_label)
 
     def _choose_export(self) -> None:
         path, _ = QFileDialog.getSaveFileName(

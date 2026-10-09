@@ -28,7 +28,7 @@ from rvs_core.vcs.git import GitError, GitRepo
 NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 CACHE = ".rvs-cache"
 __all__ = [
-    "Baseline", "BaselineError", "OpenChangeRequestsError", "baselined_uids", "create_baseline", "item_digest",
+    "Baseline", "BaselineError", "current_label", "OpenChangeRequestsError", "baselined_uids", "create_baseline", "item_digest",
     "list_baselines", "snapshot_dir", "verify_baseline",
 ]  # fmt: skip
 
@@ -148,6 +148,12 @@ def create_baseline(
     message = f"{name}\n\n{description}\n\nitems: {len(items)}\nmanifest-sha256: {digest}\n"
     repo.create_tag(tag_name, message, who, commit)
     return Baseline(name, description, who, created, commit, tag_name, len(items), deferred_all, digest)
+
+
+def current_label(root: Path) -> str:
+    """Provenance text for outputs generated from the working copy."""
+    found = list_baselines(root)
+    return f"working copy (latest baseline: {found[-1].name})" if found else "working copy (no baseline)"
 
 
 def _promote(root: Path, cfg: ProjectConfig, name: str, who: str) -> None:

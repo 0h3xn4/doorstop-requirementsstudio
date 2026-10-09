@@ -25,7 +25,7 @@ Rule for every milestone: tests first; mypy + ruff clean; offline test and `door
 - CSV/XLSX import & export, DOCX, PDF, HTML with provenance blocks; Hypothesis round-trip and byte-identical regeneration; golden files on 3 projects. ReqIF deferred (D04) behind the format-plugin interface.
 - **Accept:** unchanged-item round trip yields no diff; GUI stays responsive during export.
 
-## M5 Change control
+## M5 Change control  *(done — see docs/demo/M5.md)*
 - Baselines (tag + manifest), change requests, open-CR gate with deferral, baseline diff and working-copy diff with visual before/after.
 - **Accept:** baseline immutability tests; diff lists added/removed/changed.
 

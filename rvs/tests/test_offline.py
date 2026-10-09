@@ -33,6 +33,18 @@ PROBE = textwrap.dedent(
     prov = Provenance("0", "3", "p", "w", datetime(2026, 1, 1), "u")
     outs = all_outputs(report.config, report.items, report.graph, prov, trace=("SYS", "EPS", "down"), impact_uid="SYS-0002")
     assert len(outs) == 29 and all(outs.values())
+    # baselines (Git via dulwich) and diffs must work offline too
+    import shutil, tempfile
+    from pathlib import Path
+    from rvs_core.changecontrol.baselines import create_baseline
+    from rvs_core.changecontrol.diff import diff_snapshots, load_snapshot
+    from rvs_core.vcs.git import GitRepo
+    with tempfile.TemporaryDirectory() as d:
+        copy = Path(d) / "p"
+        shutil.copytree(sys.argv[1], copy, ignore=shutil.ignore_patterns(".rvs-cache"))
+        GitRepo.init(copy)
+        create_baseline(copy, "B1", "offline", user="probe")
+        assert diff_snapshots(load_snapshot(copy, "B1"), load_snapshot(copy, None)).changes == ()
     import json
     banned = sorted(m for m in sys.modules if m.split(".")[0] in {
         "requests", "urllib3", "bottle", "plantuml_markdown", "ftplib", "smtplib", "xmlrpc", "socketserver",

@@ -7,6 +7,8 @@ from collections.abc import Sequence
 from pathlib import Path
 
 import rvs_core
+from rvs_cli import changecontrol
+from rvs_core.changecontrol.baselines import BaselineError
 from rvs_core.exporters import BINARY_FORMATS, TABLE_FORMATS
 from rvs_core.exporters.export_request import ExportRequest, build_output
 from rvs_core.exporters.itemsio import (
@@ -20,6 +22,7 @@ from rvs_core.matrices import (
     Provenance,
 )
 from rvs_core.validate import validate_project
+from rvs_core.vcs.git import GitError
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -48,7 +51,10 @@ def build_parser() -> argparse.ArgumentParser:
     exp.add_argument("--method", action="append", default=[], help="VCM: only this verification method (repeatable)")
     exp.add_argument("--level", action="append", default=[], help="VCM: only this verification level (repeatable)")
     exp.add_argument("--status", action="append", default=[], help="VCM: only this verification status (repeatable)")
+    exp.add_argument("--baseline", help="export the project as it was at this baseline")
     exp.add_argument("--only-gaps", action="store_true", help="VCM: only requirements that nothing verifies")
+
+    changecontrol.add_parsers(sub)
 
     imp = sub.add_parser(
         "import", help="import items from a CSV or XLSX file written by 'export --items' (exit 0 ok, 1 errors)"
@@ -58,6 +64,7 @@ def build_parser() -> argparse.ArgumentParser:
     imp.add_argument("--dry-run", action="store_true", help="show what would change; write nothing")
     imp.add_argument("--skip-errors", action="store_true", help="apply the valid rows even if some rows have errors")
     imp.add_argument("--reason", default="", help="why the items change (required for baselined items)")
+    imp.add_argument("--cr", default=None, help="change request the imported edits belong to")
     imp.add_argument("--user", default=None, help="name recorded in the item history (default: login name)")
     return parser
 
@@ -103,15 +110,26 @@ def _export(args: argparse.Namespace) -> int:
     if args.format in BINARY_FORMATS and not args.output:
         print(f"rvs export: --format {args.format} writes a binary file; give --output FILE.", file=sys.stderr)
         return 2
-    report = validate_project(args.project, doorstop=False)
-    if report.exit_code == 3 or report.config is None:
-        for f in report.findings:
-            print(f.format(), file=sys.stderr)
-        return 3
+    folder, label = args.project, None
     try:
+        if args.baseline:
+            from rvs_core.changecontrol.baselines import snapshot_dir
+
+            folder, label = snapshot_dir(args.project, args.baseline), args.baseline
+        report = validate_project(folder, doorstop=False)
+        if report.exit_code == 3 or report.config is None:
+            for f in report.findings:
+                print(f.format(), file=sys.stderr)
+            return 3
         assert report.graph is not None
-        data = build_output(_request(args), report.config, report.items, report.graph, Provenance.now(report.config))
-    except ValueError as exc:
+        if label is None:
+            from rvs_core.changecontrol.baselines import current_label
+
+            label = current_label(args.project)
+        data = build_output(
+            _request(args), report.config, report.items, report.graph, Provenance.now(report.config, baseline=label)
+        )
+    except (ValueError, BaselineError, GitError) as exc:
         print(f"rvs export: {exc}", file=sys.stderr)
         return 2
     if args.output:
@@ -154,7 +172,13 @@ def _import(args: argparse.Namespace) -> int:
             f"Dry run: {plan.count('create')} to create, {plan.count('update')} to update, {plan.count('unchanged')} unchanged, {len(plan.errors)} errors."
         )
         return 1 if plan.errors else 0
-    result = apply_import(args.project, plan, user=args.user, why=args.reason, skip_errors=args.skip_errors)
+    try:
+        result = apply_import(
+            args.project, plan, user=args.user, why=args.reason, skip_errors=args.skip_errors, change_request=args.cr
+        )
+    except ValueError as exc:
+        print(f"rvs import: {exc}", file=sys.stderr)
+        return 2
     if not result.applied:
         print(
             f"{result.errors} row(s) have errors, so nothing was imported. Fix them, or use --skip-errors to import the valid rows."
@@ -178,5 +202,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _export(args)
     if args.command == "import":
         return _import(args)
+    if args.command in ("baseline", "cr", "diff"):
+        return changecontrol.run(args)
     parser.print_help()
     return 0

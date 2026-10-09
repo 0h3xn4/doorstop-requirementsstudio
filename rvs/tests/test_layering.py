@@ -51,3 +51,10 @@ def test_rvs_packages_import_no_network_modules():
     for pkg in ("rvs_core", "rvs_cli", "rvs_gui"):
         bad = [(p.name, m) for p, m in _imports(pkg) if m in NETWORK_MODULES or _top(m) in NETWORK_MODULES]
         assert not bad, bad
+
+
+def test_only_the_vcs_package_imports_dulwich():
+    for pkg in ("rvs_core", "rvs_cli", "rvs_gui"):
+        for path, mod in _imports(pkg):
+            if _top(mod) == "dulwich":
+                assert path.parts[-3:-1] == ("rvs_core", "vcs"), (path, mod)

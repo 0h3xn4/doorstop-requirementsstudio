@@ -105,3 +105,36 @@ def test_export_and_import_timings_at_5000_items(stress: Path):
     for name, seconds in timings.items():
         print(f"\n{name:34} {seconds:6.1f} s")
     assert max(timings.values()) < 300
+
+
+def test_baseline_and_diff_timings_at_5000_items(stress: Path, tmp_path: Path):
+    """A baseline commits and tags all 5,000 items; a diff extracts and parses the tagged tree (cold)."""
+    from rvs_core.authoring import EditService
+    from rvs_core.changecontrol.baselines import create_baseline, verify_baseline
+    from rvs_core.changecontrol.diff import diff_snapshots, load_snapshot
+    from rvs_core.vcs.git import GitRepo
+
+    root = tmp_path / "stress"
+    shutil.copytree(stress, root, ignore=shutil.ignore_patterns(".rvs-cache"))
+    old = time.time() - 600
+    for p in root.rglob("*.yml"):
+        os.utime(p, (old, old))
+    GitRepo.init(root)
+    timings: dict[str, float] = {}
+
+    def timed(name: str, fn):  # type: ignore[no-untyped-def]
+        t = time.perf_counter()
+        out = fn()
+        timings[name] = time.perf_counter() - t
+        return out
+
+    timed("baseline create (5000 items)", lambda: create_baseline(root, "B1", "perf", user="perf"))
+    EditService(root, user="perf").update_item("SYS-0001", attrs={"owner": "changed"}, why="perf")
+    timed("verify (deep, cold extract)", lambda: verify_baseline(root, "B1"))
+    base = timed("load baseline snapshot (warm)", lambda: load_snapshot(root, "B1"))
+    work = timed("load working copy", lambda: load_snapshot(root, None))
+    diff = timed("diff 5000 vs 5000", lambda: diff_snapshots(base, work))
+    assert diff.changed == 1
+    for name, seconds in timings.items():
+        print(f"\n{name:34} {seconds:6.1f} s")
+    assert max(timings.values()) < 120

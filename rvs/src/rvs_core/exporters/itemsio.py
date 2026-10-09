@@ -476,12 +476,18 @@ def plan_import(
 
 # applying ##############################################################################################
 def apply_import(
-    root: Path, plan: ImportPlan, *, user: str | None = None, why: str = "", skip_errors: bool = False
+    root: Path,
+    plan: ImportPlan,
+    *,
+    user: str | None = None,
+    why: str = "",
+    skip_errors: bool = False,
+    change_request: str | None = None,
 ) -> ImportReport:
     unchanged = plan.count("unchanged")
     if plan.errors and not skip_errors:
         return ImportReport(False, 0, 0, unchanged, len(plan.errors))
-    svc = EditService(root, user=user)
+    svc = EditService(root, user=user, change_request=change_request)
     cfg = svc._cfg
     proj = DoorstopProject.open(root)
     order = {d.prefix: n for n, d in enumerate(cfg.project.documents)}

@@ -84,6 +84,12 @@ project/
 - GUI: File > Export… / Import Items…, export button on each matrix tab (format by file extension), background `jobs`.
 - Measured at 5,000 items: items CSV 0.1 s, XLSX export 2.1 s, import plan 0.2 s, VCM xlsx/pdf/docx 0.5/3.6/6.1 s, spec html/pdf/docx 0.1/9.1/23 s (background thread).
 
+## 5e. As built in M5
+- `rvs_core.vcs.git`: the only dulwich user (commit a directory, annotated tags, read a tree at a commit). `rvs_core.changecontrol`: `manifests` (light helpers), `changes` (CR store + validation), `baselines` (create/list/verify/snapshot), `diff` (snapshots, field/word diff, `diff_doc`/`diff_table`).
+- Config: `config/changes.yaml`. Files: `baselines/*.yaml`, `changes/CR-*.yaml`, `history/**.jsonl`. Validation adds `RVS-CR-*` and `RVS-BASELINE-*` findings.
+- GUI tabs Changes / Baselines / Diff; New Baseline dialog; `ProjectSession.active_cr`; baseline creation, comparison and diff export run on worker threads.
+- Measured at 5,000 items: baseline create 7.9 s, deep verify (cold) 7.2 s, load a baseline snapshot 0.6 s, diff 0.1 s.
+
 ## 6. Risks
 1. Doorstop's transitive network libs vs. offline test (DEVIATIONS V01).
 2. Doorstop load time at 5,000 items — benchmark in M1 spike; fallback is the one-pass cached index.

@@ -47,7 +47,7 @@ class EditService:
         self._cfg, _ = load_project_config(self.root)
 
     # helpers ################################################################
-    def _record(self, uid: str, action: str, fields: Sequence[str], why: str) -> None:
+    def record(self, uid: str, action: str, fields: Sequence[str], why: str) -> None:
         path = history_path(self.root, uid)
         path.parent.mkdir(parents=True, exist_ok=True)
         entry = {
@@ -73,7 +73,7 @@ class EditService:
                     "Choose a parent from the parent document."
                 )
 
-    def _require_reason(self, item: ItemData, why: str) -> None:
+    def require_reason(self, item: ItemData, why: str) -> None:
         statuses = self._cfg.rules.get("change_control", {}).get("reason_required_statuses", [])
         if item.attrs.get("status") in statuses and not why.strip():
             raise ReasonRequiredError(
@@ -98,7 +98,7 @@ class EditService:
         item = proj.add_item(prefix, text, attrs={**defaults, **(attrs or {})}, derived=derived)
         for parent in parents:
             proj.link(item.uid, parent)
-        self._record(item.uid, "create", ["text", *(attrs or {}), *(["links"] if parents else [])], why)
+        self.record(item.uid, "create", ["text", *(attrs or {}), *(["links"] if parents else [])], why)
         return proj.get_item(item.uid)
 
     def update_item(
@@ -106,7 +106,7 @@ class EditService:
     ) -> ItemData:
         proj = DoorstopProject.open(self.root)
         before = proj.get_item(uid)
-        self._require_reason(before, why)
+        self.require_reason(before, why)
         changed = [k for k, v in (attrs or {}).items() if before.attrs.get(k) != v]
         if text is not None and text.strip() != before.text.strip():
             changed.append("text")
@@ -115,27 +115,27 @@ class EditService:
         proj.update_item(
             uid, text=text if "text" in changed else None, attrs={k: (attrs or {})[k] for k in changed if k != "text"}
         )
-        self._record(uid, "update", changed, why)
+        self.record(uid, "update", changed, why)
         return proj.get_item(uid)
 
     def clear_suspect(self, uid: str, *, why: str = "") -> ItemData:
         """Accept the current state of the item's parents: its links stop being suspect."""
         proj = DoorstopProject.open(self.root)
         before = proj.get_item(uid)
-        self._require_reason(before, why)
+        self.require_reason(before, why)
         if not proj.suspect_links(uid):
             return before
         proj.clear_suspect(uid)
-        self._record(uid, "clear-suspect", ["links"], why)
+        self.record(uid, "clear-suspect", ["links"], why)
         return proj.get_item(uid)
 
     def set_parents(self, uid: str, parents: Sequence[str], *, why: str = "") -> ItemData:
         proj = DoorstopProject.open(self.root)
         before = proj.get_item(uid)
-        self._require_reason(before, why)
+        self.require_reason(before, why)
         self._check_parents(proj, before.document, parents)
         if tuple(sorted(parents)) == before.links:
             return before
         proj.set_links(uid, parents)
-        self._record(uid, "update", ["links"], why)
+        self.record(uid, "update", ["links"], why)
         return proj.get_item(uid)

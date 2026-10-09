@@ -57,6 +57,7 @@ class DoorstopProject:
         self._tree = tree
         self._cache = ItemCache(root)
         self.cache_stats = CacheStats()
+        self._index: dict[str, Any] = {}  # uid -> Doorstop item, filled per document on first lookup
 
     # construction ###########################################################
 
@@ -123,9 +124,17 @@ class DoorstopProject:
     # items ##################################################################
 
     def _item(self, uid: str) -> Any:
+        if uid not in self._index:
+            prefix = uid.rsplit("-", 1)[0] if "-" in uid else ""
+            try:
+                doc = self._doc(prefix)
+            except ProjectError:
+                raise ProjectError(f"Item '{uid}' does not exist. Check the ID or refresh the project.") from None
+            for item in doc.items:  # one pass per document; later lookups are dictionary hits
+                self._index[str(item.uid)] = item
         try:
-            return self._tree.find_item(uid)
-        except DoorstopError:
+            return self._index[uid]
+        except KeyError:
             raise ProjectError(f"Item '{uid}' does not exist. Check the ID or refresh the project.") from None
 
     def _data(self, item: Any) -> ItemData:
@@ -209,22 +218,55 @@ class DoorstopProject:
         normative: bool = True,
         derived: bool = False,
         header: str = "",
+        number: int | None = None,
+        active: bool = True,
+        ref: str = "",
     ) -> ItemData:
         doc = self._doc(prefix)
-        item = doc.add_item(level=level, reorder=False)  # reorder would rewrite every item file
+        try:
+            item = doc.add_item(number=number, level=level, reorder=False)  # reorder would rewrite every item file
+        except DoorstopError as exc:
+            raise ProjectError(f"The item cannot be created in {prefix}: {exc}") from exc
+        self._index[str(item.uid)] = item
         item.text = text
         item.normative = normative
         item.derived = derived
         if header:
             item.header = header
+        if not active:
+            item.active = False
+        if ref:
+            item.ref = ref
         merged = {VERSION_KEY: CURRENT_VERSION, **(attrs or {})}
         item.set_attributes(merged)
         return self._data(item)
 
-    def update_item(self, uid: str, *, text: str | None = None, attrs: Mapping[str, Any] | None = None) -> ItemData:
+    def update_item(
+        self,
+        uid: str,
+        *,
+        text: str | None = None,
+        attrs: Mapping[str, Any] | None = None,
+        normative: bool | None = None,
+        derived: bool | None = None,
+        active: bool | None = None,
+        header: str | None = None,
+        level: str | None = None,
+        ref: str | None = None,
+    ) -> ItemData:
         item = self._item(uid)
         if text is not None:
             item.text = text
+        for name, value in (
+            ("normative", normative),
+            ("derived", derived),
+            ("active", active),
+            ("header", header),
+            ("level", level),
+            ("ref", ref),
+        ):
+            if value is not None:
+                setattr(item, name, value)
         if attrs:
             item.set_attributes(dict(attrs))
         return self._data(item)

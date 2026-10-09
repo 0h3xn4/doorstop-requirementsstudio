@@ -7,9 +7,18 @@ from collections.abc import Sequence
 from pathlib import Path
 
 import rvs_core
+from rvs_core.exporters import BINARY_FORMATS, DOC_FORMATS, TABLE_FORMATS, render_doc, render_table
+from rvs_core.exporters.builders import spec_doc
+from rvs_core.exporters.itemsio import (
+    apply_import,
+    export_items_csv,
+    export_items_xlsx,
+    plan_import,
+    read_csv,
+    read_xlsx,
+)
 from rvs_core.findings import Severity
 from rvs_core.matrices import (
-    MatrixTable,
     Provenance,
     VcmFilter,
     build_traceability,
@@ -17,7 +26,6 @@ from rvs_core.matrices import (
     coverage_table,
     impact_table,
 )
-from rvs_core.matrices.render import render
 from rvs_core.trace import coverage, impact
 from rvs_core.validate import ValidationReport, validate_project
 
@@ -40,13 +48,25 @@ def build_parser() -> argparse.ArgumentParser:
     what.add_argument("--trace", metavar="SRC:DST[:up|down]", help="traceability matrix between two documents")
     what.add_argument("--coverage", action="store_true", help="coverage per document")
     what.add_argument("--impact", metavar="UID", help="items affected by a change to UID")
-    exp.add_argument("--format", choices=("csv", "json"), default="csv")
+    what.add_argument("--items", action="store_true", help="all items as a table (csv or xlsx; re-importable)")
+    what.add_argument("--spec", action="store_true", help="specification document (html, docx or pdf); see --document")
+    exp.add_argument("--format", choices=TABLE_FORMATS, default="csv")
     exp.add_argument("--output", "-o", type=Path, help="write to this file instead of standard output")
-    exp.add_argument("--document", action="append", default=[], help="VCM: only this document (repeatable)")
+    exp.add_argument("--document", action="append", default=[], help="VCM and --spec: only this document (repeatable)")
     exp.add_argument("--method", action="append", default=[], help="VCM: only this verification method (repeatable)")
     exp.add_argument("--level", action="append", default=[], help="VCM: only this verification level (repeatable)")
     exp.add_argument("--status", action="append", default=[], help="VCM: only this verification status (repeatable)")
     exp.add_argument("--only-gaps", action="store_true", help="VCM: only requirements that nothing verifies")
+
+    imp = sub.add_parser(
+        "import", help="import items from a CSV or XLSX file written by 'export --items' (exit 0 ok, 1 errors)"
+    )
+    imp.add_argument("project", type=Path)
+    imp.add_argument("file", type=Path)
+    imp.add_argument("--dry-run", action="store_true", help="show what would change; write nothing")
+    imp.add_argument("--skip-errors", action="store_true", help="apply the valid rows even if some rows have errors")
+    imp.add_argument("--reason", default="", help="why the items change (required for baselined items)")
+    imp.add_argument("--user", default=None, help="name recorded in the item history (default: login name)")
     return parser
 
 
@@ -62,43 +82,102 @@ def _validate(args: argparse.Namespace) -> int:
     return report.exit_code
 
 
-def _build_table(args: argparse.Namespace, report: ValidationReport) -> MatrixTable:
+def _build_output(args: argparse.Namespace, report: ValidationReport) -> bytes:
     cfg, items, graph = report.config, report.items, report.graph
     assert cfg is not None and graph is not None
     prov = Provenance.now(cfg)
+    fmt = args.format
+    if args.items:
+        if fmt not in ("csv", "xlsx"):
+            raise ValueError("--items can be written as csv or xlsx")
+        return export_items_csv(cfg, items, prov) if fmt == "csv" else export_items_xlsx(cfg, items, prov)
+    if args.spec:
+        if fmt not in DOC_FORMATS:
+            raise ValueError(f"--spec can be written as {', '.join(DOC_FORMATS)}")
+        return render_doc(spec_doc(cfg, items, graph, args.document or None, prov), fmt)
     if args.vcm:
         flt = VcmFilter(tuple(args.document), tuple(args.method), tuple(args.level), tuple(args.status), args.only_gaps)
-        return build_vcm(cfg, items, graph, flt, provenance=prov)
-    if args.trace:
+        table = build_vcm(cfg, items, graph, flt, provenance=prov)
+    elif args.trace:
         parts = args.trace.split(":")
         if len(parts) not in (2, 3):
             raise ValueError("--trace needs SRC:DST or SRC:DST:up|down, for example SYS:EPS")
-        return build_traceability(
+        table = build_traceability(
             cfg, items, graph, parts[0], parts[1], parts[2] if len(parts) == 3 else "down", provenance=prov
         )
-    if args.coverage:
-        return coverage_table(cfg, coverage(cfg, items, graph), prov)
-    if args.impact not in graph.uids:
-        raise ValueError(f"Item {args.impact} does not exist in this project.")
-    return impact_table(items, impact(graph, args.impact), prov)
+    elif args.coverage:
+        table = coverage_table(cfg, coverage(cfg, items, graph), prov)
+    else:
+        if args.impact not in graph.uids:
+            raise ValueError(f"Item {args.impact} does not exist in this project.")
+        table = impact_table(items, impact(graph, args.impact), prov)
+    return render_table(table, fmt)
 
 
 def _export(args: argparse.Namespace) -> int:
+    if args.format in BINARY_FORMATS and not args.output:
+        print(f"rvs export: --format {args.format} writes a binary file; give --output FILE.", file=sys.stderr)
+        return 2
     report = validate_project(args.project, doorstop=False)
     if report.exit_code == 3 or report.config is None:
         for f in report.findings:
             print(f.format(), file=sys.stderr)
         return 3
     try:
-        text = render(_build_table(args, report), args.format)
+        data = _build_output(args, report)
     except ValueError as exc:
         print(f"rvs export: {exc}", file=sys.stderr)
         return 2
     if args.output:
-        args.output.write_text(text, encoding="utf-8", newline="\n")
+        args.output.write_bytes(data)
     else:
-        sys.stdout.write(text)
+        sys.stdout.write(data.decode("utf-8"))
     return 0
+
+
+def _import(args: argparse.Namespace) -> int:
+    path: Path = args.file
+    if not path.is_file():
+        print(f"rvs import: the file {path} does not exist.", file=sys.stderr)
+        return 2
+    suffix = path.suffix.lower()
+    if suffix not in (".csv", ".xlsx"):
+        print("rvs import: the file must be .csv or .xlsx (written by 'rvs export --items').", file=sys.stderr)
+        return 2
+    report = validate_project(args.project, doorstop=False)
+    if report.exit_code == 3 or report.config is None:
+        for f in report.findings:
+            print(f.format(), file=sys.stderr)
+        return 3
+    try:
+        data = path.read_bytes()
+        rows = read_csv(data) if suffix == ".csv" else read_xlsx(data)
+    except Exception as exc:  # noqa: BLE001 - corrupt or non-spreadsheet file: say so plainly
+        print(f"rvs import: {path.name} could not be read ({exc}).", file=sys.stderr)
+        return 2
+    plan = plan_import(report.config, report.items, rows, why=args.reason)
+    for r in plan.results:
+        if r.action == "unchanged":
+            continue
+        if r.action == "error":
+            print(f"row {r.row:>4}  ERROR   {r.message}")
+        else:
+            print(f"row {r.row:>4}  {r.action:<7} {r.uid or '(new)':<10} {', '.join(r.changes)}")
+    if args.dry_run:
+        print(
+            f"Dry run: {plan.count('create')} to create, {plan.count('update')} to update, {plan.count('unchanged')} unchanged, {len(plan.errors)} errors."
+        )
+        return 1 if plan.errors else 0
+    result = apply_import(args.project, plan, user=args.user, why=args.reason, skip_errors=args.skip_errors)
+    if not result.applied:
+        print(
+            f"{result.errors} row(s) have errors, so nothing was imported. Fix them, or use --skip-errors to import the valid rows."
+        )
+        return 1
+    print(
+        f"{result.created} created, {result.updated} updated, {result.unchanged} unchanged, {result.errors} errors skipped."
+    )
+    return 1 if result.errors else 0
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -111,5 +190,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _validate(args)
     if args.command == "export":
         return _export(args)
+    if args.command == "import":
+        return _import(args)
     parser.print_help()
     return 0

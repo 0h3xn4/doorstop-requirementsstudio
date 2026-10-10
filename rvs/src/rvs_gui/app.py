@@ -440,7 +440,7 @@ class MainWindow(QMainWindow):
 
     def _refresh_recent(self) -> None:
         self.recent_menu.clear()
-        recent = userconfig.recent_projects()
+        recent = [p for p in userconfig.recent_projects() if p.is_dir()]  # a moved or deleted project is not offered
         for path in recent:
             act = QAction(str(path), self)
             act.triggered.connect(lambda _c=False, p=path: self.open_project(p))

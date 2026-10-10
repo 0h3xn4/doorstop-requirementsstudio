@@ -31,11 +31,13 @@ def crash_report(exc_type: type[BaseException] | None, exc: BaseException | None
         "frames (most recent call last):",
     ]
     for frame in traceback.extract_tb(tb):
-        name = frame.filename
+        name = frame.filename.replace("\\", "/")
         for marker in ("site-packages/", "src/", "_internal/"):
-            if marker in name.replace("\\", "/"):
-                name = name.replace("\\", "/").split(marker, 1)[1]
+            if marker in name:
+                name = name.split(marker, 1)[1]
                 break
+        else:  # a path outside the program: never reveal the user's folder names
+            name = ".../" + name.rsplit("/", 1)[-1]
         lines.append(f"  {name}:{frame.lineno} in {frame.name}")
     return "\n".join(lines) + "\n"
 
@@ -49,7 +51,7 @@ def save_crash_report(
         path = folder / f"crash-{datetime.now().strftime('%Y%m%d-%H%M%S-%f')}.txt"
         path.write_text(crash_report(exc_type, exc, tb), encoding="utf-8", newline="\n")
         return path
-    except OSError:
+    except Exception:  # noqa: BLE001 - the crash handler itself must never fail (no home folder, read-only disk, ...)
         return None
 
 
@@ -192,9 +194,14 @@ def _digest(path: Path) -> str:
 
 
 def _files(root: Path) -> list[str]:
+    """Every file under ``root`` (a symbolic link to a file counts as a file; a link to a folder is reported by
+    ``write_manifest`` because its contents could change unseen)."""
     out = []
-    for dirpath, dirnames, filenames in os.walk(root):
+    for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
         dirnames.sort()
+        for d in dirnames:
+            if Path(dirpath, d).is_symlink():
+                out.append(Path(dirpath, d).relative_to(root).as_posix())  # surfaced as a problem later
         for f in sorted(filenames):
             rel = Path(dirpath, f).relative_to(root).as_posix()
             if rel not in (MANIFEST, INSTALL_MARKER):  # the marker is written by the installer, after the manifest
@@ -203,7 +210,18 @@ def _files(root: Path) -> list[str]:
 
 
 def write_manifest(root: Path) -> None:
-    lines = [f"{_digest(root / rel)}  {rel}" for rel in _files(root)]
+    lines = []
+    for rel in _files(root):
+        path = root / rel
+        if "\n" in rel or "\r" in rel:
+            raise ValueError(f"The file name {rel!r} contains a line break and cannot be listed in {MANIFEST}.")
+        if path.is_dir():
+            raise ValueError(
+                f"{rel} is a link to a folder; its contents cannot be covered by {MANIFEST}. Remove the link."
+            )
+        if not path.is_file():
+            raise ValueError(f"{rel} is a broken link; remove it before building the manifest.")
+        lines.append(f"{_digest(path)}  {rel}")
     (root / MANIFEST).write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
 
 
@@ -213,7 +231,9 @@ def verify_manifest(root: Path) -> list[str]:
     if not path.is_file():
         return [f"{MANIFEST} is missing"]
     expected: dict[str, str] = {}
-    for line in path.read_text(encoding="utf-8").splitlines():
+    for line in path.read_text(encoding="utf-8").split(
+        "\n"
+    ):  # not splitlines(): U+2028 and friends are file name characters
         digest, _, rel = line.partition("  ")
         if rel:
             expected[rel] = digest

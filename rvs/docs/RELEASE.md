@@ -11,6 +11,9 @@ Run on the release machine (Linux build shown; do the same on Windows, which has
 7. Smoke test the archive in a clean HOME: `./install.sh` (verifies the manifest, runs the selftest), `rvs init`, `rvs validate`, start `rvs-studio`, `./uninstall.sh`. Done for 0.1.0 on Linux.
 8. `pip-audit` needs the vulnerability database (network); run it on a connected build machine, never inside the product.
 
+## Independent review (done for 0.1.0)
+Five reviewers examined core data integrity, exporters/import, change control/Git, the GUI, and CLI/installer/security, each with reproducers; the findings and what was decided are in DECISIONS D79-D82 and DEVIATIONS V24. Repeat this pass before a major release.
+
 ## Licences to review (0.1.0)
 - PySide6-Essentials / shiboken6: LGPL-3.0 (used under LGPL; the one-folder bundle keeps the Qt libraries as separate shared files, so users can replace them).
 - Doorstop 3.2: LGPL-3.0. dulwich: Apache-2.0 (dual-licensed). Everything else is permissive; see `dist/rvs-licenses.txt`.

@@ -7,7 +7,8 @@ from rvs_cli.main import main
 def _run(capsys, *argv: str) -> tuple[int, str]:  # type: ignore[no-untyped-def]
     capsys.readouterr()
     code = main(list(argv))
-    return code, capsys.readouterr().out
+    captured = capsys.readouterr()
+    return code, captured.out + captured.err
 
 
 def test_cr_lifecycle(minimal_project: Path, capsys):  # type: ignore[no-untyped-def]

@@ -41,6 +41,19 @@ if getattr(yaml, "CSafeLoader", None) is not None:
     _doorstop_common.load_yaml.__defaults__ = (yaml.CSafeLoader,)
 
 
+def _refuse_includes(root: Path) -> None:
+    """Doorstop lets a document's .doorstop.yml pull in any file with ``!include``; a project from elsewhere could use
+    that to read local files into findings and exports. RVS projects never need it."""
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in (".git", ".rvs-cache")]
+        if ".doorstop.yml" in filenames:
+            config = Path(dirpath, ".doorstop.yml")
+            if "!include" in config.read_text(encoding="utf-8", errors="replace"):
+                raise ProjectError(
+                    f"{config.relative_to(root)} uses '!include', which RVS does not allow: remove it from the file."
+                )
+
+
 def yaml_parser_is_fast() -> bool:
     """True when Doorstop reads items with libyaml's C parser (see above)."""
     return getattr(yaml, "CSafeLoader", None) is not None and _doorstop_common.load_yaml.__defaults__ == (
@@ -92,6 +105,7 @@ class DoorstopProject:
         root = Path(root)
         if not root.is_dir():
             raise ProjectError(f"Project folder {root} does not exist. Check the path or create a project first.")
+        _refuse_includes(root)
         try:
             return cls(root, builder.build(root=str(root)))
         except DoorstopError as exc:

@@ -277,3 +277,31 @@ def test_cancelled_dialogs_are_released(win: MainWindow, monkeypatch):  # type: 
         win.glossary_dialog()
     QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
     assert len(win.findChildren(QDialog)) == 0 and Qt  # noqa: PLR2004
+
+
+def test_recent_list_hides_projects_that_no_longer_exist(win: MainWindow, tmp_path: Path):
+    gone = tmp_path / "gone"
+    gone.mkdir()
+    userconfig.add_recent(gone)
+    shutil.rmtree(gone)
+    win._refresh_recent()  # noqa: SLF001
+    assert not any(str(gone) in a.text() for a in win.recent_menu.actions())
+
+
+def test_an_unreadable_shortcut_override_falls_back_to_the_default(qtbot):  # type: ignore[no-untyped-def]
+    from PySide6.QtGui import QKeySequence
+
+    userconfig.set_shortcut("save", "not a key")
+    w = create_main_window()
+    qtbot.addWidget(w)
+    assert w.actions_by_id["save"].shortcut() == QKeySequence("Ctrl+S")
+
+
+def test_the_wizard_explains_a_parent_document_without_requirements(win: MainWindow, qtbot, tmp_path: Path):  # type: ignore[no-untyped-def]
+    from rvs_gui.wizard import NewRequirementWizard
+
+    assert win.create_project(tmp_path / "fresh", "Fresh", "minimal", False)
+    wiz = NewRequirementWizard(win.session, win)
+    qtbot.addWidget(wiz)
+    wiz.document.setCurrentText("SUB")
+    assert "no requirements yet" in wiz.parent_help.text()

@@ -60,7 +60,7 @@ Both modes use the same data and the same rules; nothing is hidden in guided mod
 
 ### Installing
 
-On Linux, unpack the release and run `./install.sh` (it installs for your user only and needs no administrator rights). On Windows, run the installer, which also installs for your user. `./uninstall.sh` removes the program and leaves your projects and settings untouched.
+On Linux, unpack the release and run `./install.sh` (it installs for your user only and needs no administrator rights). On Windows, run the installer, which also installs for your user. `./uninstall.sh` removes the program and leaves your projects and settings untouched. The installer checks every file against `MANIFEST.sha256` first and refuses to install if one differs or an unlisted file is present. It only replaces a folder that is missing, empty or was installed by it (`--prefix DIR` chooses another folder), and `uninstall.sh` only removes such a folder.
 
 ### Checking an installation
 

@@ -86,6 +86,8 @@ def _fail(message: str, code: int = 2) -> int:
 
 
 def run(args: argparse.Namespace) -> int:
+    if not (Path(args.project) / "rvs-project.yaml").is_file():
+        return _fail(f"{args.project} is not an RVS project folder (it has no rvs-project.yaml).", 3)
     try:
         if args.command == "baseline":
             return _baseline(args)
@@ -105,10 +107,12 @@ def _baseline(args: argparse.Namespace) -> int:
         for spec in args.defer:
             cr_id, _, reason = spec.partition("=")
             defer[cr_id.strip()] = reason
+        if not (args.message or "").strip():
+            raise ValueError('A baseline needs a message that says why it exists (-m "...").')
         try:
             b = create_baseline(root, args.name, args.message, user=args.user, defer=defer, init_git=args.init_git)
         except OpenChangeRequestsError as exc:
-            print(f'{exc}\nExample: --defer {exc.open_requests[0].id}="after PDR"')
+            print(f'{exc}\nExample: --defer {exc.open_requests[0].id}="after PDR"', file=sys.stderr)
             return 1
         extra = f" Deferred change requests: {', '.join(b.deferred)}." if b.deferred else ""
         print(f"Baseline {b.name} created: {b.items} items, tag {b.tag}, commit {b.commit[:10]}.{extra}")

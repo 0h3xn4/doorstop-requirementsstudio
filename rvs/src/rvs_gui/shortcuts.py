@@ -34,7 +34,12 @@ SHORTCUTS: dict[str, tuple[str, str]] = {
 
 def key_for(action_id: str) -> QKeySequence:
     override = userconfig.load()["shortcuts"].get(action_id)
-    return QKeySequence(override or SHORTCUTS[action_id][0])
+    if override:
+        sequence = QKeySequence(override)
+        # Qt parses any text into *some* sequence ("not a key" becomes N, O, T ...); accept only text it reads back as is
+        if not sequence.isEmpty() and sequence.toString().replace(" ", "").lower() == override.replace(" ", "").lower():
+            return sequence
+    return QKeySequence(SHORTCUTS[action_id][0])  # no override, or one Qt cannot read: the default stays
 
 
 class ShortcutsDialog(QDialog):

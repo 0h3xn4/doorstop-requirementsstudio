@@ -226,6 +226,11 @@ class NewRequirementWizard(QWizard):
                 f"Tick the requirement(s) in {decl.parent if decl else ''} that this one derives from. "
                 "At least one is needed so that the requirement is traceable."
             )
+        if not root and not self.parent_candidates():
+            self.parent_help.setText(
+                f"{decl.parent if decl else 'The parent document'} has no requirements yet, so there is nothing to derive "
+                "this one from. Create the parent requirement first (choose that document on this page), then come back."
+            )
         for uid in self.parent_candidates():
             parent_item = self.session.item(uid)
             title = (parent_item.attrs.get("title") or parent_item.header) if parent_item else ""

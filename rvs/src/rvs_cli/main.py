@@ -124,7 +124,7 @@ def _request(args: argparse.Namespace) -> ExportRequest:
         kind = "spec"
     elif args.vcm:
         kind = "vcm"
-    elif args.trace:
+    elif args.trace is not None:
         kind = "trace"
     elif args.coverage:
         kind = "coverage"

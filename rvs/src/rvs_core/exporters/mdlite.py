@@ -7,7 +7,9 @@ from dataclasses import dataclass
 Span = tuple[str, str]  # (text, style) with style in "", "b", "i", "code"
 Spans = tuple[Span, ...]
 
-_INLINE = re.compile(r"(\*\*(?P<b>[^*\n]+?)\*\*|(?<![\w*])\*(?P<i>[^*\s][^*\n]*?)\*(?![\w*])|`(?P<c>[^`\n]+)`)")
+_INLINE = re.compile(
+    r"(\*\*(?P<b>[^*\n]+?)\*\*|(?<![\w*])\*(?P<i>[^*\s](?:[^*\n]*?[^*\s])?)\*(?![\w*])|`(?P<c>[^`\n]+)`)"
+)
 _BULLET = re.compile(r"^\s*[-*+]\s+(.*)$")
 _NUMBER = re.compile(r"^\s*\d+[.)]\s+(.*)$")
 

@@ -69,13 +69,15 @@ def _check(name: str, fn: Callable[[], str]) -> CheckResult:
 
 
 def selftest() -> list[CheckResult]:
-    """Exercise every bundled component. Works in a scratch folder in the current directory and removes it."""
+    """Exercise every bundled component. Works in a scratch folder and removes it."""
     from datetime import datetime as dt
 
     from rvs_core.config import CONFIG_NAMES, load_project_config, packaged_default
     from rvs_core.config.schema import validate_against_schema
 
-    scratch = Path(tempfile.mkdtemp(prefix=".rvs-selftest-", dir=Path.cwd()))
+    scratch = Path(
+        tempfile.mkdtemp(prefix="rvs-selftest-")
+    )  # the system temp folder: the current folder may be read-only
     results: list[CheckResult] = []
     state: dict[str, object] = {}
 

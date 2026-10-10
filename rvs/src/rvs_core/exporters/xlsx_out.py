@@ -7,6 +7,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
+from rvs_core import textcheck
 from rvs_core.exporters.zipnorm import normalize_zip
 from rvs_core.matrices.provenance import Provenance
 from rvs_core.matrices.table import MatrixTable
@@ -14,10 +15,19 @@ from rvs_core.matrices.table import MatrixTable
 _GAP_FILL = {"unverified-approved": "FFD7D9", "orphan": "FFD7D9", "unverified": "FCF4D6", "childless": "FCF4D6"}
 
 
+XLSX_CELL_LIMIT = 32_767  # characters an Excel cell can hold; openpyxl silently cuts longer strings
+
+
 def set_text(cell, value: str) -> None:  # type: ignore[no-untyped-def]
-    """Store ``value`` as a string even when it starts with '=', '+', '-' or '@'."""
+    """Store ``value`` as a string even when it starts with '=', '+', '-' or '@'.
+
+    Characters XML cannot hold are replaced and over-long text is cut with a visible marker (an exact copy of the data is
+    the CSV/ReqIF export; the items XLSX export refuses long cells before it gets here)."""
     if value == "":
         return
+    value = textcheck.clean(value)
+    if len(value) > XLSX_CELL_LIMIT:
+        value = value[: XLSX_CELL_LIMIT - 20] + " … [text cut]"
     cell.value = value
     cell.data_type = "s"
 

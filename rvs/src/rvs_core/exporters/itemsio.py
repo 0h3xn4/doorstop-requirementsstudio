@@ -9,6 +9,8 @@ re-imported export changes nothing, and a file with just ``id,title`` updates ju
 import csv
 import io
 import re
+import sys
+import zipfile
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime
@@ -18,11 +20,13 @@ from typing import Any
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment
 
-from rvs_core.adapter import DoorstopProject, ItemData
+from rvs_core import csvsafe, textcheck
+from rvs_core.adapter import DoorstopProject, ItemData, ProjectError
 from rvs_core.authoring import EditService
+from rvs_core.changecontrol.manifests import baselined_uids
 from rvs_core.config import ProjectConfig
 from rvs_core.config.model import AttributeDef
-from rvs_core.exporters.xlsx_out import finish, fit_columns, provenance_sheet, set_text, style_header
+from rvs_core.exporters.xlsx_out import XLSX_CELL_LIMIT, finish, fit_columns, provenance_sheet, set_text, style_header
 from rvs_core.matrices.provenance import Provenance
 
 CORE_COLUMNS = ["id", "document", "level", "normative", "derived", "active", "header", "ref", "text", "parents"]
@@ -30,8 +34,10 @@ ALIASES = {"uid": "id", "prefix": "document", "statement": "text", "parent": "pa
 HIDDEN_ATTRIBUTES = {"rvs_schema_version"}
 _UID = re.compile(r"^[A-Z][A-Z0-9]*-\d+$")
 _LEVEL = re.compile(r"^\d+(\.\d+)*$")
-_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_DATE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
 _TRUE, _FALSE = {"yes", "true", "1", "y"}, {"no", "false", "0", "n"}
+csv.field_size_limit(min(sys.maxsize, 2**31 - 1))  # RVS can write a statement larger than the default 128 KiB limit
+MAX_XLSX_ROWS, MAX_XLSX_COLUMNS, MAX_XLSX_BYTES = 200_000, 300, 400 * 1024 * 1024
 
 
 # columns and value encoding ###################################################################
@@ -62,6 +68,8 @@ def encode(value: Any, adef: AttributeDef | None = None) -> str:
         return "yes" if value else "no"
     if adef is not None and adef.type == "ref-list":
         return _encode_ref_list(value)
+    if adef is not None and adef.type == "string-list" and isinstance(value, list | tuple):
+        return ", ".join(_escape(str(v)) for v in value)
     if isinstance(value, list | tuple):
         return ", ".join(str(v) for v in value)
     return str(value)
@@ -99,7 +107,7 @@ def export_items_csv(cfg: ProjectConfig, items: Sequence[ItemData], prov: Proven
         buf.write(f"# {line}\n")
     writer = csv.writer(buf, lineterminator="\n")
     writer.writerow(cols)
-    writer.writerows(_row_for(cfg, i, cols, defs) for i in _ordered(cfg, items))
+    writer.writerows([csvsafe.protect(c) for c in _row_for(cfg, i, cols, defs)] for i in _ordered(cfg, items))
     return b"\xef\xbb\xbf" + buf.getvalue().encode("utf-8")  # BOM: Excel opens UTF-8 CSV correctly
 
 
@@ -112,6 +120,13 @@ def export_items_xlsx(cfg: ProjectConfig, items: Sequence[ItemData], prov: Prove
     for decl in cfg.project.documents:
         ws = wb.create_sheet(decl.prefix)
         rows = [_row_for(cfg, i, cols, defs) for i in ordered if i.document == decl.prefix]
+        for row in rows:
+            for column, cell in zip(cols, row, strict=True):
+                if len(cell) > XLSX_CELL_LIMIT:
+                    raise ValueError(
+                        f"{row[0]}: the {column} is {len(cell):,} characters long, more than an Excel cell holds "
+                        f"({XLSX_CELL_LIMIT:,}). Export the items as CSV or ReqIF instead."
+                    )
         for c, name in enumerate(cols, start=1):
             ws.cell(row=1, column=c, value=name)
         for r, row in enumerate(rows, start=2):
@@ -146,10 +161,16 @@ def read_csv(data: bytes) -> list[dict[str, str]]:
         if not any(c.strip() for c in record):
             continue
         row = {
-            h: (record[i].replace("\r\n", "\n").replace("\r", "\n") if i < len(record) else "")
+            h: (csvsafe.unprotect(record[i]).replace("\r\n", "\n").replace("\r", "\n") if i < len(record) else "")
             for i, h in enumerate(header)
         }
         row["_row"] = str(start + reader.line_num)
+        extra = [c for c in record[len(header) :] if c.strip()]
+        if extra:
+            row["_error"] = (
+                f"The row has {len(extra)} more cell(s) than the header has columns. "
+                "An unquoted comma inside a text is the usual cause: put that text in quotes"
+            )
         rows.append(row)
     return rows
 
@@ -169,26 +190,42 @@ def _cell_text(value: Any) -> str:
 
 
 def read_xlsx(data: bytes) -> list[dict[str, str]]:
-    wb = load_workbook(io.BytesIO(data), data_only=True)
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            if sum(info.file_size for info in archive.infolist()) > MAX_XLSX_BYTES:
+                raise ValueError("The workbook expands to more than 400 MB, which RVS will not read")
+    except zipfile.BadZipFile:
+        raise ValueError("The file is not an Excel workbook (.xlsx)") from None
+    wb = load_workbook(io.BytesIO(data), data_only=True, read_only=True)  # streams; a sparse sheet costs nothing
     rows: list[dict[str, str]] = []
-    for ws in wb.worksheets:
-        if ws.title.lower() in ("provenance", "readme"):
-            continue
-        it = ws.iter_rows(values_only=True)
-        try:
-            header = _canonical_header([_cell_text(v) for v in next(it)])
-        except StopIteration:
-            continue
-        for n, values in enumerate(it, start=2):
-            cells = [_cell_text(v) for v in values]
-            if not any(c.strip() for c in cells):
+    try:
+        for ws in wb.worksheets:
+            if ws.title.lower() in ("provenance", "readme"):
                 continue
-            row = {h: (cells[i] if i < len(cells) else "") for i, h in enumerate(header) if h}
-            if not row.get("document", "").strip():
-                row["document"] = ws.title
-            row["_row"] = str(n)
-            row["_sheet"] = ws.title
-            rows.append(row)
+            it = ws.iter_rows(min_row=1, max_row=MAX_XLSX_ROWS + 1, max_col=MAX_XLSX_COLUMNS, values_only=True)
+            try:
+                header = _canonical_header([_cell_text(v) for v in next(it)])
+            except StopIteration:
+                continue
+            empty_run = 0
+            for n, values in enumerate(it, start=2):
+                cells = [_cell_text(v) for v in values]
+                if not any(c.strip() for c in cells):
+                    empty_run += 1
+                    if empty_run >= 1000:
+                        break  # the rest of a sparse sheet is empty
+                    continue
+                empty_run = 0
+                if n > MAX_XLSX_ROWS:
+                    raise ValueError(f"The sheet {ws.title} has more than {MAX_XLSX_ROWS:,} rows")
+                row = {h: (cells[i] if i < len(cells) else "") for i, h in enumerate(header) if h}
+                if not row.get("document", "").strip():
+                    row["document"] = ws.title
+                row["_row"] = str(n)
+                row["_sheet"] = ws.title
+                rows.append(row)
+    finally:
+        wb.close()
     return rows
 
 
@@ -248,6 +285,29 @@ def _bool(text: str) -> bool:
     raise ValueError(f"'{text}' is not yes or no")
 
 
+def _escape(value: str) -> str:
+    return value.replace("\\", "\\\\").replace(",", "\\,").replace(";", "\\;")
+
+
+def _split_escaped(text: str) -> list[str]:
+    """Split a string-list cell on , or ; where they are not escaped with a backslash."""
+    parts, current, i = [], [], 0
+    while i < len(text):
+        c = text[i]
+        if c == "\\" and i + 1 < len(text):
+            current.append(text[i + 1])
+            i += 2
+            continue
+        if c in ",;":
+            parts.append("".join(current).strip())
+            current = []
+        else:
+            current.append(c)
+        i += 1
+    parts.append("".join(current).strip())
+    return [p for p in parts if p]
+
+
 def _split(text: str) -> list[str]:
     return [p.strip() for p in re.split(r"[,;]", text) if p.strip()]
 
@@ -269,8 +329,13 @@ def _decode_attr(adef: AttributeDef, text: str, cfg: ProjectConfig) -> Any:
             raise ValueError(f"'{text}' is not a whole number") from None
     if t == "date":
         value = text.strip()
-        if value and not _DATE.match(value):
-            raise ValueError(f"'{text}' is not a date written YYYY-MM-DD")
+        if value:
+            try:
+                if not _DATE.match(value):
+                    raise ValueError
+                datetime.strptime(value, "%Y-%m-%d")
+            except ValueError:
+                raise ValueError(f"'{text}' is not a date written YYYY-MM-DD") from None
         return value
     if t == "uid-list":
         ids = _split(text)
@@ -279,7 +344,7 @@ def _decode_attr(adef: AttributeDef, text: str, cfg: ProjectConfig) -> Any:
             raise ValueError(f"'{bad[0]}' is not an item ID such as SYS-0001")
         return ids
     if t == "string-list":
-        return _split(text)
+        return _split_escaped(text)
     if t == "ref-list":
         out = []
         for part in [p.strip() for p in text.split(";") if p.strip()]:
@@ -302,17 +367,32 @@ def _same(new: Any, old: Any, adef: AttributeDef) -> bool:
 
 
 def plan_import(
-    cfg: ProjectConfig, items: Sequence[ItemData], rows: Sequence[Mapping[str, str]], *, why: str = ""
+    cfg: ProjectConfig,
+    items: Sequence[ItemData],
+    rows: Sequence[Mapping[str, str]],
+    *,
+    why: str = "",
+    root: Path | None = None,
 ) -> ImportPlan:
+    """Plan (dry run) an import. With ``root`` the plan also knows which items are in a baseline, so a change that needs
+    a reason is reported here and not half way through applying."""
     plan = ImportPlan()
+    baselined = baselined_uids(root) if root is not None else frozenset()
+    numbers: dict[str, int] = {}
+    for existing_item in items:
+        m = _UID.match(existing_item.uid)
+        if m:
+            numbers[existing_item.document] = max(
+                numbers.get(existing_item.document, 0), int(existing_item.uid.rsplit("-", 1)[1])
+            )
     known_columns = set(item_columns(cfg)) | HIDDEN_ATTRIBUTES
     existing = {i.uid: i for i in items}
     docs = {d.prefix: d for d in cfg.project.documents}
     defs = _attr_defs(cfg)
     reason_statuses = set(cfg.rules.get("change_control", {}).get("reason_required_statuses", []))
 
-    columns = [c for c in (rows[0].keys() if rows else []) if not c.startswith("_")]
-    unknown = [c for c in columns if c not in known_columns]
+    all_columns = list(dict.fromkeys(c for r in rows for c in r if not c.startswith("_")))
+    unknown = [c for c in all_columns if c not in known_columns]
     if unknown:
         plan.results.append(
             RowResult(
@@ -324,7 +404,6 @@ def plan_import(
         )
         return plan
 
-    explicit_new = {r["id"].strip() for r in rows if r.get("id", "").strip() and r["id"].strip() not in existing}
     seen: set[str] = set()
     pending_parent_checks: list[tuple[int, str, str, list[str]]] = []  # result index, doc, uid, parents
 
@@ -336,6 +415,10 @@ def plan_import(
         uid = raw.get("id", "").strip()
         doc = raw.get("document", "").strip()
         item = existing.get(uid) if uid else None
+        columns = [c for c in raw if not c.startswith("_")]  # each row (each sheet) is read with its own columns
+        if raw.get("_error"):
+            error(row_no, uid, f"{raw['_error']}.")
+            continue
         if uid:
             if uid in seen:
                 error(row_no, uid, f"{uid} appears twice in the file; keep one row per item.")
@@ -349,6 +432,22 @@ def plan_import(
                 error(row_no, uid, f"{uid} belongs to document {prefix}, but the row says {doc}.")
                 continue
             doc = prefix
+            canonical = f"{prefix}{cfg.numbering.sep_for(prefix)}{int(uid.rsplit('-', 1)[1]):0{cfg.numbering.digits_for(prefix)}d}"
+            if uid != canonical:
+                error(
+                    row_no,
+                    uid,
+                    f"Write the ID as {canonical} (with its leading zeros), or leave it empty for a new item.",
+                )
+                continue
+            if item is None and int(uid.rsplit("-", 1)[1]) <= numbers.get(prefix, 0):
+                error(
+                    row_no,
+                    uid,
+                    f"{uid} is a new item but its number is not above the highest existing one in {prefix} "
+                    f"({numbers[prefix]}). Use a higher number, or leave the ID empty.",
+                )
+                continue
         if not doc:
             error(row_no, uid, "The row needs a document (or an ID that names it).")
             continue
@@ -393,6 +492,8 @@ def plan_import(
                             raise ValueError(f"'{col}' is not defined for {decl.kind} documents ({doc})")
                         continue
                     attrs[col] = _decode_attr(adef, text, cfg)
+            for field_name, value in {**core, **attrs}.items():
+                textcheck.check(field_name, value)
         except ValueError as exc:
             problem = str(exc)
         if problem:
@@ -436,11 +537,12 @@ def plan_import(
         if not changes:
             plan.results.append(RowResult(row_no, uid, "unchanged", document=doc))
             continue
-        if item.attrs.get("status") in reason_statuses and not why.strip():
+        if (item.attrs.get("status") in reason_statuses or uid in baselined) and not why.strip():
             error(
                 row_no,
                 uid,
-                f"{uid} is {item.attrs.get('status')}; changing it needs a reason. Enter why you are importing these changes.",
+                f"{uid} is {item.attrs.get('status') if item.attrs.get('status') in reason_statuses else 'part of a baseline'}; "
+                "changing it needs a reason. Enter why you are importing these changes.",
                 doc,
             )
             continue
@@ -451,25 +553,40 @@ def plan_import(
         if "parents" in changes and parents is not None:
             pending_parent_checks.append((idx, doc, uid, parents))
 
-    known_uids = set(existing) | explicit_new
-    for idx, doc, _uid, parents in pending_parent_checks:
-        decl = docs[doc]
-        problem = ""
-        if parents and decl.parent is None:
-            problem = f"{doc} is the root document and cannot have parents"
-        else:
-            for p in parents:
-                if p not in known_uids:
-                    problem = f"parent {p} does not exist"
-                elif p.rsplit("-", 1)[0] != decl.parent:
-                    problem = f"parent {p} is not in the parent document of {doc} ({decl.parent})"
-                if problem:
-                    break
-        if problem:
-            old = plan.results[idx]
-            plan.results[idx] = RowResult(
-                old.row, old.uid, "error", message=f"{old.uid or 'New row'}: {problem}.", document=doc
-            )
+    # Parents must exist; a parent that is itself rejected does not count (--skip-errors must not create orphans).
+    checked: set[int] = set()
+    while True:
+        known_uids = set(existing) | {
+            op.uid
+            for op in plan.ops
+            if op.kind == "create" and op.uid and plan.results[op.result_index].action != "error"
+        }
+        failed = False
+        for idx, doc, _uid, parents in pending_parent_checks:
+            if idx in checked or plan.results[idx].action == "error":
+                continue
+            decl = docs[doc]
+            problem = ""
+            if parents and decl.parent is None:
+                problem = f"{doc} is the root document and cannot have parents"
+            else:
+                for p in parents:
+                    if p not in known_uids:
+                        problem = f"parent {p} does not exist"
+                    elif p.rsplit("-", 1)[0] != decl.parent:
+                        problem = f"parent {p} is not in the parent document of {doc} ({decl.parent})"
+                    if problem:
+                        break
+            if problem:
+                old = plan.results[idx]
+                plan.results[idx] = RowResult(
+                    old.row, old.uid, "error", message=f"{old.uid or 'New row'}: {problem}.", document=doc
+                )
+                failed = True
+            else:
+                checked.add(idx)
+        if not failed:
+            break
     plan.ops = [op for op in plan.ops if plan.results[op.result_index].action != "error"]
     return plan
 
@@ -492,6 +609,8 @@ def apply_import(
     proj = DoorstopProject.open(root)
     order = {d.prefix: n for n, d in enumerate(cfg.project.documents)}
     created: list[tuple[_Op, str]] = []
+    for op in (o for o in plan.ops if o.kind == "update"):  # every reason is checked before the first write
+        svc.require_reason(proj.get_item(op.uid), why)
     # Creations first, ascending by explicit number (Doorstop cannot create a number below the next free one).
     creates = sorted(
         (o for o in plan.ops if o.kind == "create"),
@@ -513,6 +632,10 @@ def apply_import(
             active=op.core.get("active", True),
             ref=op.core.get("ref", ""),
         )
+        if op.uid and item.uid != op.uid:
+            raise ProjectError(
+                f"{op.uid} could not be created with that number (it became {item.uid}); the import stopped."
+            )
         created.append((op, item.uid))
     updated = 0
     for op in (o for o in plan.ops if o.kind == "update"):

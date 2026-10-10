@@ -5,6 +5,7 @@ import json
 import sys
 from pathlib import Path
 
+from rvs_cli.output import emit
 from rvs_core.changecontrol.baselines import (
     BaselineError,
     OpenChangeRequestsError,
@@ -204,10 +205,7 @@ def _diff(args: argparse.Namespace) -> int:
         out = to_csv(diff_table(diff, prov)).encode("utf-8")
     else:
         out = render_doc(diff_doc(diff, prov), fmt)
-    if args.output:
-        args.output.write_bytes(out)
-    elif fmt in BINARY_FORMATS:
+    if not args.output and fmt in BINARY_FORMATS:
         return _fail(f"--format {fmt} writes a binary file; give --output FILE.")
-    else:
-        sys.stdout.write(out.decode("utf-8"))
+    emit(out, args.output)
     return 0

@@ -2,12 +2,16 @@
 
 import argparse
 import json
+import os
 import sys
 from collections.abc import Sequence
 from pathlib import Path
 
 import rvs_core
 from rvs_cli import changecontrol
+from rvs_cli.output import emit
+from rvs_core.adapter import ProjectError
+from rvs_core.authoring import ReasonRequiredError
 from rvs_core.changecontrol.baselines import BaselineError
 from rvs_core.exporters import BINARY_FORMATS, TABLE_FORMATS
 from rvs_core.exporters.export_request import ExportRequest, build_output
@@ -158,16 +162,16 @@ def _export(args: argparse.Namespace) -> int:
             from rvs_core.changecontrol.baselines import current_label
 
             label = current_label(args.project)
+        unknown = [d for d in args.document if d not in {x.prefix for x in report.config.project.documents}]
+        if unknown:
+            raise ValueError(f"The document {unknown[0]} does not exist in this project.")
         data = build_output(
             _request(args), report.config, report.items, report.graph, Provenance.now(report.config, baseline=label)
         )
     except (ValueError, BaselineError, GitError) as exc:
         print(f"rvs export: {exc}", file=sys.stderr)
         return 2
-    if args.output:
-        args.output.write_bytes(data)
-    else:
-        sys.stdout.write(data.decode("utf-8"))
+    emit(data, args.output)
     return 0
 
 
@@ -188,7 +192,10 @@ def _import(args: argparse.Namespace) -> int:
     try:
         data = path.read_bytes()
         if suffix == ".reqif":
-            mapping = dict(m.split("=", 1) for m in args.map if "=" in m)
+            bad = [m for m in args.map if "=" not in m]
+            if bad:
+                raise ValueError(f"--map needs NAME=COLUMN, not '{bad[0]}'")
+            mapping = dict(m.split("=", 1) for m in args.map)
             read = read_reqif(data, report.config, report.items, document=args.document, mapping=mapping)
             rows = read.rows
             for note in read.notes:
@@ -200,7 +207,7 @@ def _import(args: argparse.Namespace) -> int:
     except Exception as exc:  # noqa: BLE001 - corrupt or non-spreadsheet file: say so plainly
         print(f"rvs import: {path.name} could not be read ({exc}).", file=sys.stderr)
         return 2
-    plan = plan_import(report.config, report.items, rows, why=args.reason)
+    plan = plan_import(report.config, report.items, rows, why=args.reason, root=args.project)
     for r in plan.results:
         if r.action == "unchanged":
             continue
@@ -217,7 +224,7 @@ def _import(args: argparse.Namespace) -> int:
         result = apply_import(
             args.project, plan, user=args.user, why=args.reason, skip_errors=args.skip_errors, change_request=args.cr
         )
-    except ValueError as exc:
+    except (ValueError, ProjectError, ReasonRequiredError) as exc:
         print(f"rvs import: {exc}", file=sys.stderr)
         return 2
     if not result.applied:
@@ -241,9 +248,18 @@ def _init(args: argparse.Namespace) -> int:
     if args.project is None or not args.name:
         print('rvs init: give a folder and --name, for example: rvs init my-sat --name "My satellite"', file=sys.stderr)
         return 2
+    parent_projects = [
+        p for p in (args.project.resolve(), *args.project.resolve().parents) if (p / "rvs-project.yaml").is_file()
+    ]
+    if parent_projects:
+        print(
+            f"rvs init: {parent_projects[0]} is already an RVS project; a project cannot be created inside another.",
+            file=sys.stderr,
+        )
+        return 2
     try:
         create_from_template(args.project, args.name, args.template, git=args.git)
-    except ValueError as exc:
+    except (ValueError, OSError) as exc:
         print(f"rvs init: {exc}", file=sys.stderr)
         return 2
     print(f"Project '{args.name}' created in {args.project} from the {args.template} template.")
@@ -283,6 +299,21 @@ def _guide(args: argparse.Namespace) -> int:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    """Run the command line. Expected failures are messages with exit code 2, never tracebacks."""
+    for stream in (sys.stdout, sys.stderr):  # a Windows console or pipe may default to a legacy code page
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+    try:
+        return _main(argv)
+    except BrokenPipeError:  # `rvs ... | head`
+        sys.stdout = open(os.devnull, "w")  # noqa: SIM115, PTH123 - keeps interpreter shutdown from complaining
+        return 0
+    except OSError as exc:
+        print(f"rvs: {exc.strerror or exc}{f' ({exc.filename})' if exc.filename else ''}", file=sys.stderr)
+        return 2
+
+
+def _main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     if args.version:

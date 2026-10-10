@@ -4,6 +4,7 @@ import csv
 import io
 import json
 
+from rvs_core import csvsafe
 from rvs_core.matrices.table import MatrixTable
 
 
@@ -33,7 +34,7 @@ def to_csv(table: MatrixTable) -> str:
         buf.write(f"# {line}\n")
     writer = csv.writer(buf, lineterminator="\n")
     writer.writerow(table.columns)
-    writer.writerows(table.rows)
+    writer.writerows([csvsafe.protect(c) for c in row] for row in table.rows)  # no formula injection in Excel
     return buf.getvalue()
 
 

@@ -58,7 +58,7 @@ class ImportDialog(QDialog):
     def replan(self, *_a: Any) -> None:
         cfg = self.session.cfg
         assert cfg is not None
-        self.plan = plan_import(cfg, self.session.items, self.rows, why=self.reason.text())
+        self.plan = plan_import(cfg, self.session.items, self.rows, why=self.reason.text(), root=self.session.root)
         rows, flags = [], []
         for r in self.plan.results:
             if r.action == "unchanged":

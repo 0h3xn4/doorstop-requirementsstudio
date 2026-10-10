@@ -37,6 +37,13 @@ def _register_fonts() -> None:
     _registered = True
 
 
+CELL_LIMIT = 1500  # a cell taller than a page cannot be split by ReportLab
+
+
+def _fit_cell(value: str) -> str:
+    return value if len(value) <= CELL_LIMIT else value[:CELL_LIMIT] + " … [cut: see the CSV or XLSX export]"
+
+
 def _esc(text: str) -> str:
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
@@ -90,7 +97,7 @@ def render_pdf(doc: Doc) -> bytes:
         weights = [min(max(n, 6), 40) for n in lens]
         widths = [width * w / sum(weights) for w in weights]
         data = [[RLParagraph(_esc(c), cell_head) for c in t.columns]]
-        data += [[RLParagraph(_esc(v), cell) for v in row] for row in t.rows]
+        data += [[RLParagraph(_esc(_fit_cell(v)), cell) for v in row] for row in t.rows]
         style = [("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#F4F4F4")), ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#C6C6C6")),
                  ("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 3), ("RIGHTPADDING", (0, 0), (-1, -1), 3)]  # fmt: skip
         for n, flag in enumerate(t.flags):

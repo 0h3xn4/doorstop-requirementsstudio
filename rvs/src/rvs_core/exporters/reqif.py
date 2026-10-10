@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 
 import markdown
 
+from rvs_core import textcheck
 from rvs_core.adapter import ItemData
 from rvs_core.config import ProjectConfig
 from rvs_core.config.model import AttributeDef
@@ -44,19 +45,21 @@ CORE_ATTRIBUTES = (
     ("Derived", "RVS.Derived", "boolean"),
     ("Active", "RVS.Active", "boolean"),
     ("Ref", "RVS.Ref", "string"),
+    ("Parents", "RVS.Parents", "string"),
 )
 RELATION_PARENT = "parent"
 _NAME_TO_COLUMN = {
     "reqif.text": "text", "rvs.markdown": "text", "reqif.chaptername": "title", "reqif.name": "title",
     "rvs.level": "level", "rvs.header": "header", "rvs.normative": "normative", "rvs.derived": "derived",
-    "rvs.active": "active", "rvs.ref": "ref", "reqif.foreignid": "id",
+    "rvs.active": "active", "rvs.ref": "ref", "reqif.foreignid": "id", "rvs.parents": "parents",
 }  # fmt: skip
 
 
 def _e(tag: str, parent: ET.Element | None = None, text: str | None = None, **attrs: str) -> ET.Element:
+    attrs = {k: textcheck.clean(v) for k, v in attrs.items()}  # XML 1.0 cannot hold most control characters
     element = ET.Element(Q + tag, attrs) if parent is None else ET.SubElement(parent, Q + tag, attrs)
     if text is not None:
-        element.text = text
+        element.text = textcheck.clean(text)
     return element
 
 
@@ -67,23 +70,28 @@ def _ref(parent: ET.Element, wrapper: str, tag: str, target: str) -> None:
 # export #########################################################################################################
 def _xhtml_div(text: str) -> ET.Element:
     """Markdown -> XHTML div. Raw HTML in a statement is shown as text, never interpreted."""
+    text = textcheck.clean(text)
     escaped = text.replace("&", "&amp;").replace("<", "&lt;")
     html = markdown.markdown(escaped, extensions=["sane_lists"], output_format="xhtml")
     try:
-        return ET.fromstring(f'<div xmlns="{XHTML}">{html}</div>')  # noqa: S314 - our own markup, no entities
+        div = ET.fromstring(f'<div xmlns="{XHTML}">{html}</div>')  # noqa: S314 - our own markup, no entities
     except ET.ParseError:
         div = ET.Element(f"{{{XHTML}}}div")
         ET.SubElement(div, f"{{{XHTML}}}p").text = text
-        return div
+    for element in div.iter():  # a link or image in a statement must not carry a script or data URL into other tools
+        for attribute in ("href", "src"):
+            target = element.get(attribute, "")
+            if target and not re.match(r"^(https?:|mailto:|#|[^:/]*(/|$))", target.strip(), re.IGNORECASE):
+                del element.attrib[attribute]
+    return div
 
 
 def _attribute_columns(cfg: ProjectConfig) -> list[AttributeDef]:
     """Template attributes carried as plain attributes (links become relations, the schema version is internal)."""
-    link_attrs = {t.attribute for t in cfg.links.values()}
     seen: dict[str, AttributeDef] = {}
     for kind in ("requirements", "verification"):
         for adef in list(cfg.templates.kinds[kind].attributes) + list(cfg.project.free_attributes):
-            if adef.name in HIDDEN_ATTRIBUTES or adef.name in link_attrs or adef.name in seen:
+            if adef.name in HIDDEN_ATTRIBUTES or adef.name in seen:
                 continue
             seen[adef.name] = adef
     return list(seen.values())
@@ -210,6 +218,8 @@ def export_reqif(
         put("Derived", "true" if item.derived else "false", "boolean")
         put("Active", "true" if item.active else "false", "boolean")
         put("Ref", item.ref)
+        if item.links:
+            put("Parents", ", ".join(item.links))
         for adef in attrs:
             raw = item.attrs.get(adef.name)
             if raw in (None, "", []):
@@ -339,6 +349,9 @@ def xhtml_to_markdown(div: ET.Element) -> str:
     return re.sub(r"\n{3,}", "\n\n", text).strip()
 
 
+MAX_HIERARCHY_DEPTH = 100
+
+
 def _place(
     box: ET.Element | None,
     prefix: str,
@@ -348,6 +361,8 @@ def _place(
     path: list[int],
 ) -> None:
     """Walk a SPEC-HIERARCHY: each object gets the document ``prefix`` and its dotted position as level."""
+    if len(path) >= MAX_HIERARCHY_DEPTH:
+        raise ValueError(f"The ReqIF specification is nested more than {MAX_HIERARCHY_DEPTH} levels deep.")
     for number, node in enumerate(_children(box, "SPEC-HIERARCHY") if box is not None else [], start=1):
         here = [*path, number]
         oid = _ref_text(node, "OBJECT")
@@ -364,8 +379,10 @@ def _normal(name: str) -> str:
 def _parse(data: bytes) -> ET.Element:
     if not data.strip():
         raise ValueError("The ReqIF file is empty.")
-    lowered = data.lower()
-    if b"<!doctype" in lowered or b"<!entity" in lowered:
+    variants = [data.lower()]
+    for encoding in ("utf-16", "utf-32"):  # the same declaration spelled in a wider encoding
+        variants.append(data.decode(encoding, errors="ignore").lower().encode("utf-8", errors="ignore"))
+    if any(b"<!doctype" in v or b"<!entity" in v for v in variants):
         raise ValueError("The ReqIF file contains DOCTYPE or entity declarations, which RVS does not read.")
     try:
         root = ET.fromstring(data)  # noqa: S314 - DOCTYPE/ENTITY declarations were refused above
@@ -376,7 +393,21 @@ def _parse(data: bytes) -> ET.Element:
     return root
 
 
-def read_reqif(  # noqa: C901 - one linear pass over the ReqIF structure
+def read_reqif(
+    data: bytes,
+    cfg: ProjectConfig,
+    items: Sequence[ItemData],
+    *,
+    document: str | None = None,
+    mapping: Mapping[str, str] | None = None,
+) -> ReqifRead:
+    try:
+        return _read_reqif(data, cfg, items, document=document, mapping=mapping)
+    except RecursionError:
+        raise ValueError("The ReqIF file is nested too deeply to read.") from None
+
+
+def _read_reqif(  # noqa: C901 - one linear pass over the ReqIF structure
     data: bytes,
     cfg: ProjectConfig,
     items: Sequence[ItemData],
@@ -539,10 +570,13 @@ def read_reqif(  # noqa: C901 - one linear pass over the ReqIF structure
             exact = adef is not None and adef.type in ("string", "text")  # stored text keeps its own whitespace
             row[column] = value if exact else value.strip()
         defs = cfg.attribute_defs(documents[doc].kind)
+        # An RVS file carries parents and links as attributes (exact, even for a partial export); other tools' files
+        # only have relations, and only when the file has relations of a kind is it taken to describe that kind.
         for link_name, tdef in link_by_name.items():
-            if tdef.attribute in defs:
+            if tdef.attribute in defs and tdef.attribute not in row and typed.get(link_name):
                 row[tdef.attribute] = ", ".join(links.get((oid, link_name), []))
-        row["parents"] = ", ".join(sorted(parents.get(oid, [])))
+        if "parents" not in row and parent_pairs:
+            row["parents"] = ", ".join(sorted(parents.get(oid, [])))
         rows.append(row)
         for c in row:
             if c not in column_set and not c.startswith("_"):

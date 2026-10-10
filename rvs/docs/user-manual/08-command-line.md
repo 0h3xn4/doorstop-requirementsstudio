@@ -8,10 +8,10 @@ This page shows how to use `rvs` in scripts and build pipelines. Everything the 
 |---|---|
 | `rvs init FOLDER --name NAME [--template T] [--git]` | create a project |
 | `rvs validate PROJECT [--format json] [--strict] [--fast]` | check a project |
-| `rvs export PROJECT --vcm|--trace SRC:DST|--coverage|--impact UID|--items|--spec|--reqif [-o FILE]` | write a report |
+| `rvs export PROJECT --vcm \| --trace SRC:DST \| --coverage \| --impact UID \| --items \| --spec \| --reqif [-o FILE]` | write a report |
 | `rvs import PROJECT FILE [--dry-run] [--reason TEXT]` | import items from CSV, XLSX or ReqIF |
-| `rvs cr new|list|show|status|defer ...` | change requests |
-| `rvs baseline create|list|verify ...` | baselines |
+| `rvs cr new \| list \| show \| status \| defer ...` | change requests |
+| `rvs baseline create \| list \| verify ...` | baselines |
 | `rvs diff PROJECT LEFT RIGHT` | compare two states |
 | `rvs selftest` | check the installation |
 | `rvs guide` | the path of the offline user guide (HTML) |

@@ -8,7 +8,7 @@
 
 [![RVS CI](https://github.com/0h3xn4/doorstop-requirementsstudio/actions/workflows/rvs-ci.yml/badge.svg)](https://github.com/0h3xn4/doorstop-requirementsstudio/actions/workflows/rvs-ci.yml)
 ![Python 3.11 to 3.13](https://img.shields.io/badge/python-3.11%E2%80%933.13-blue)
-![Licence: proprietary, internal](https://img.shields.io/badge/licence-proprietary%20(internal)-lightgrey)
+![Licence: proprietary](https://img.shields.io/badge/licence-proprietary-lightgrey)
 
 ![RVS: documents on the left, requirements in the middle, the editor on the right, problems at the bottom](rvs/docs/guide/images/items-guided.png)
 

@@ -14,6 +14,7 @@ from rvs_core.exporters.model import Block, DiffEntry, DiffField, Doc, Heading, 
 from rvs_core.matrices.provenance import Provenance
 from rvs_core.matrices.table import MatrixTable
 
+MAX_DIFF_TOKENS = 3000  # words and spaces; difflib is quadratic in this
 WORKING = "working copy"
 Segment = tuple[str, str]  # (op, text) with op in "equal", "insert", "delete"
 
@@ -48,14 +49,29 @@ def text_segments(before: str, after: str) -> list[Segment]:
             else:
                 out.append((op, text))
 
-    for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, a, b, autojunk=False).get_opcodes():
-        if tag == "equal":
-            add("equal", a[i1:i2])
-        else:
-            if tag in ("delete", "replace"):
-                add("delete", a[i1:i2])
-            if tag in ("insert", "replace"):
-                add("insert", b[j1:j2])
+    # Common beginning and end are equal by definition; only the middle needs the (quadratic) matcher. A middle that is
+    # still huge is shown as one deletion and one insertion rather than hanging the window.
+    head = 0
+    while head < min(len(a), len(b)) and a[head] == b[head]:
+        head += 1
+    tail = 0
+    while tail < min(len(a), len(b)) - head and a[len(a) - 1 - tail] == b[len(b) - 1 - tail]:
+        tail += 1
+    add("equal", a[:head])
+    mid_a, mid_b = a[head : len(a) - tail], b[head : len(b) - tail]
+    if len(mid_a) + len(mid_b) > MAX_DIFF_TOKENS:
+        add("delete", mid_a)
+        add("insert", mid_b)
+    else:
+        for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, mid_a, mid_b, autojunk=False).get_opcodes():
+            if tag == "equal":
+                add("equal", mid_a[i1:i2])
+            else:
+                if tag in ("delete", "replace"):
+                    add("delete", mid_a[i1:i2])
+                if tag in ("insert", "replace"):
+                    add("insert", mid_b[j1:j2])
+    add("equal", a[len(a) - tail :])
     return out
 
 

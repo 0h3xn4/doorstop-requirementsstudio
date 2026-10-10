@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from rvs_core.adapter import DocumentInfo, DoorstopProject, ItemData, ProjectError, UnreadableItemError
-from rvs_core.changecontrol.baselines import BaselineError, verify_baseline
+from rvs_core.changecontrol.baselines import BaselineError, orphan_tags, verify_baseline
 from rvs_core.changecontrol.changes import ChangeRequestError, ChangeRequestStore, validate_change_requests
 from rvs_core.changecontrol.manifests import manifest_names
 from rvs_core.config import ConfigError, ProjectConfig, load_project_config
@@ -404,6 +404,17 @@ def _validate(root: Path, *, strict: bool, doorstop: bool) -> ValidationReport:
                     "rvs-project.yaml",
                 )
             )
+    for tag_name in orphan_tags(root):
+        findings.append(
+            Finding(
+                "RVS-BASELINE-NOMANIFEST",
+                Severity.ERROR,
+                f"Baseline {tag_name} has a Git tag but its manifest baselines/{tag_name}.yaml is missing.",
+                f"Restore it from the tagged commit (git checkout rvs/baseline/{tag_name} -- baselines/{tag_name}.yaml); "
+                "without it the baseline is not enforced.",
+                f"baselines/{tag_name}.yaml",
+            )
+        )
     pending = cfg.standards.unresolved()
     if pending:
         findings.append(

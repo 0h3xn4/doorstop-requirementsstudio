@@ -6,13 +6,17 @@ need external programs), and only files inside the project directory are staged.
 import contextlib
 import getpass
 import os
+import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from dulwich.errors import NotGitRepository
+from dulwich.errors import NotGitRepository, RefFormatError
+from dulwich.ignore import IgnoreFilterManager
+from dulwich.index import commit_index
 from dulwich.objects import Commit, Tag, Tree
+from dulwich.refs import check_ref_format
 from dulwich.repo import Repo
 
 SKIP_DIRS = {".git", ".rvs-cache"}
@@ -81,7 +85,8 @@ class GitRepo:
             email = cfg.get((b"user",), b"email").decode()
         except KeyError:
             pass
-        name = name or _login()
+        name = re.sub(r"[<>\r\n]", "", name or _login()).strip() or "unknown"
+        email = re.sub(r"[<>\r\n]", "", email) if email else email
         return f"{name} <{email or name.replace(' ', '.') + '@localhost'}>".encode()
 
     def head(self) -> str | None:
@@ -92,31 +97,85 @@ class GitRepo:
 
     # committing ###################################################################
     def commit_directory(self, directory: Path, message: str, user: str | None) -> str:
-        """Stage everything under ``directory`` (including deletions) and commit; returns the commit id.
-        Returns the current head unchanged when there is nothing to commit."""
+        """Commit the files under ``directory`` (deletions included) and nothing else; returns the commit id, or the
+        current head when nothing changed.
+
+        Only the project's own subtree of the head tree is replaced: files other people staged elsewhere in the
+        repository stay staged and uncommitted. Ignored files, nested repositories and Git's own folders are not
+        added. The commit object is written directly, so no Git hook runs and no signing setup is consulted."""
         directory = Path(directory).resolve()
         rel = self.relative(directory)
+        parts = [p for p in rel.split("/") if p]
+        prefix = f"{rel}/" if rel else ""
+        index = self._repo.open_index()
+        tracked = {p.decode() for p in index}
+        ignore = IgnoreFilterManager.from_repo(self._repo)
         files: list[str] = []
         for dirpath, dirnames, filenames in os.walk(directory):
-            dirnames[:] = sorted(d for d in dirnames if d not in SKIP_DIRS)
+            dirnames[:] = sorted(
+                d
+                for d in dirnames
+                if d not in SKIP_DIRS and not os.path.lexists(os.path.join(dirpath, d, ".git"))  # nested repository
+            )
             for f in sorted(filenames):
-                files.append(f"{rel}/{Path(dirpath, f).relative_to(directory).as_posix()}".lstrip("/"))
-        index = self._repo.open_index()
-        prefix = f"{rel}/" if rel else ""
-        stale = [p.decode() for p in index if p.decode().startswith(prefix) and p.decode() not in set(files)]
+                if f == ".git":
+                    continue  # a submodule's pointer file
+                path = f"{prefix}{Path(dirpath, f).relative_to(directory).as_posix()}"
+                if path not in tracked and ignore.is_ignored(path):
+                    continue  # ignored files (secrets, build output) are never force-added
+                files.append(path)
+        stale = [p for p in tracked if p.startswith(prefix) and p not in set(files)]
         worktree = self._repo.get_worktree()
         worktree.stage(files + stale)
+
         before = self.head()
         head_obj = self._repo[before.encode()] if before else None
-        tree_before = head_obj.tree if isinstance(head_obj, Commit) else None
-        # compare the staged tree against the head tree to decide whether anything changed
-        from dulwich.index import commit_index
-
-        staged_tree = commit_index(self._repo.object_store, self._repo.open_index())
-        if before and staged_tree == tree_before:
+        head_tree = self._repo[head_obj.tree] if isinstance(head_obj, Commit) else None
+        staged_root = self._repo[commit_index(self._repo.object_store, self._repo.open_index())]
+        assert isinstance(staged_root, Tree)
+        subtree: Tree = staged_root
+        for part in parts:  # the project's own subtree of what is staged
+            try:
+                node = self._repo[subtree[part.encode()][1]]
+            except KeyError:
+                raise GitError(f"Nothing under {directory} could be committed.") from None
+            assert isinstance(node, Tree)
+            subtree = node
+        new_root = self._with_subtree(head_tree if isinstance(head_tree, Tree) else None, parts, subtree.id)
+        if before and isinstance(head_obj, Commit) and new_root == head_obj.tree:
             return before
         who = self._identity(user)
-        return str(worktree.commit(message=message.encode(), committer=who, author=who, sign=False).decode())
+        commit = Commit()
+        commit.tree = new_root
+        commit.parents = [before.encode()] if before else []  # type: ignore[list-item]
+        commit.author = commit.committer = who
+        commit.author_time = commit.commit_time = int(time.time())
+        commit.author_timezone = commit.commit_timezone = 0
+        commit.encoding = b"UTF-8"
+        commit.message = message.encode()
+        try:
+            self._repo.object_store.add_object(commit)
+            self._repo.refs[b"HEAD"] = commit.id  # type: ignore[index]
+        except (OSError, KeyError) as exc:
+            raise GitError(f"Git could not record the commit: {exc}") from exc
+        return str(commit.id.decode())
+
+    def _with_subtree(self, root: Tree | None, parts: list[str], sub_sha: bytes) -> bytes:
+        """``root`` with the entry at ``parts`` replaced by ``sub_sha`` (rebuilding the trees on the way down)."""
+        if not parts:
+            return sub_sha
+        tree = Tree()
+        child: Tree | None = None
+        if root is not None:
+            for entry in root.items():
+                if entry.path == parts[0].encode():
+                    existing = self._repo[entry.sha]
+                    child = existing if isinstance(existing, Tree) else None
+                else:
+                    tree.add(entry.path, entry.mode, entry.sha)
+        tree.add(parts[0].encode(), 0o040000, self._with_subtree(child, parts[1:], sub_sha))  # type: ignore[arg-type]
+        self._repo.object_store.add_object(tree)
+        return bytes(tree.id)
 
     def commit_author(self, commit: str) -> str:
         obj = self._repo[commit.encode()]
@@ -124,7 +183,14 @@ class GitRepo:
         return str(obj.author.decode())
 
     # tags ############################################################################
+    @staticmethod
+    def valid_tag_name(name: str) -> bool:
+        """Whether Git accepts ``name`` as a tag (no '..', no trailing '.' or '.lock', no special characters)."""
+        return bool(check_ref_format(f"refs/tags/{name}".encode()))  # type: ignore[arg-type]
+
     def create_tag(self, name: str, message: str, user: str | None, commit: str) -> None:
+        if not self.valid_tag_name(name):
+            raise GitError(f"Git does not accept '{name}' as a tag name.")
         ref = f"refs/tags/{name}".encode()
         if ref in self._refs:
             raise GitError(f"The tag '{name}' already exists; tags are never moved or replaced.")
@@ -135,8 +201,11 @@ class GitRepo:
         tag.tag_time = int(time.time())
         tag.tag_timezone = 0
         tag.object = (Commit, commit.encode())
-        self._repo.object_store.add_object(tag)
-        self._refs[ref] = tag.id
+        try:
+            self._repo.object_store.add_object(tag)
+            self._refs[ref] = tag.id
+        except (RefFormatError, OSError) as exc:
+            raise GitError(f"Git could not create the tag '{name}': {exc}") from exc
 
     def _tag_info(self, name: str, sha: bytes) -> TagInfo | None:
         obj = self._repo[sha]
@@ -159,9 +228,10 @@ class GitRepo:
         return sorted(found, key=lambda t: t.name)
 
     # reading ############################################################################
-    def read_tree(self, commit: str, directory: Path) -> dict[str, bytes]:
-        """Files of ``directory`` as they were in ``commit``: {path relative to the directory: bytes}."""
-        rel = self.relative(directory)
+    def read_tree(self, commit: str, directory: Path, rel: str | None = None) -> dict[str, bytes]:
+        """Files of ``directory`` as they were in ``commit``: {path relative to the directory: bytes}. ``rel`` names
+        the folder inside the repository when the project was moved since (default: where it is now)."""
+        rel = self.relative(directory) if rel is None else rel
         obj = self._repo[commit.encode()]
         assert isinstance(obj, Commit)
         tree = self._repo[obj.tree]
@@ -177,8 +247,11 @@ class GitRepo:
 
         def walk(t: Tree, prefix: str) -> None:
             for entry in t.items():
+                name = entry.path.decode("utf-8", errors="replace")
+                if name in ("", ".", "..", ".git") or "/" in name or "\\" in name or "\x00" in name:
+                    raise GitError(f"The tagged tree contains an entry named {name!r}, which cannot be a project file.")
                 child = self._repo[entry.sha]
-                path = f"{prefix}{entry.path.decode()}"
+                path = f"{prefix}{name}"
                 if isinstance(child, Tree):
                     walk(child, path + "/")
                 else:

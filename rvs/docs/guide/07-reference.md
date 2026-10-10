@@ -100,6 +100,7 @@ Every problem has a stable code, a message and a hint on how to fix it.
 | `RVS-CR-STATUS` | A change request has a status that is not configured. |
 | `RVS-BASELINE-MODIFIED` | The manifest of a baseline was changed after the baseline was created. |
 | `RVS-BASELINE-CORRUPT` | The tagged content of a baseline does not match its manifest. |
+| `RVS-BASELINE-NOMANIFEST` | A baseline's Git tag exists but its manifest file is missing, so the baseline is no longer enforced. Restore the file from the tagged commit. |
 | `RVS-BASELINE-NOTAG` | A baseline manifest exists but its Git tag is missing. |
 
 Doorstop's own tree validation (*Run Full Doorstop Validation*, `rvs validate` without `--fast`) adds findings with codes starting `DOORSTOP-`: `DOORSTOP-EMPTY-DOCUMENT` (a document has no items yet: normal in a new project), `DOORSTOP-NO-CHILD-LINKS`, `DOORSTOP-SUSPECT-LINK`, `DOORSTOP-UNREVIEWED`, and `DOORSTOP-WARNING` / `DOORSTOP-ERROR` for anything else Doorstop reports.

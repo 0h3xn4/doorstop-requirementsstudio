@@ -194,5 +194,7 @@ def test_project_path_with_spaces_and_dot_folders_still_gets_a_valid_tag(tmp_pat
     proj = repo_root / ".hidden dir" / "my project (v2)"
     build_minimal_project(proj)
     b = create_baseline(proj, "PDR", "d", user="a")
-    assert b.tag == "rvs/baseline/hidden_dir/my_project__v2_/PDR"
+    assert (
+        b.tag.startswith("rvs/baseline/hidden_dir+") and "/my_project__v2_+" in b.tag and b.tag.endswith("/PDR")
+    )  # sanitised, with a hash so different folders never collide
     assert GitRepo.discover(proj).tag(b.tag) is not None and verify_baseline(proj, "PDR") == []

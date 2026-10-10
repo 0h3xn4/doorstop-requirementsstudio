@@ -8,7 +8,14 @@ from typing import Any
 
 from rvs_core import atomicio
 
-DEFAULTS: dict[str, Any] = {"mode": "guided", "recent": [], "shortcuts": {}, "geometry": "", "theme": "light"}
+DEFAULTS: dict[str, Any] = {
+    "mode": "guided",
+    "recent": [],
+    "shortcuts": {},
+    "geometry": "",
+    "theme": "light",
+    "layout": {},
+}
 MAX_RECENT = 8
 
 
@@ -41,6 +48,16 @@ def load() -> dict[str, Any]:
         data["theme"] = "light"
     if not isinstance(data["geometry"], str) or not data["geometry"].isascii():
         data["geometry"] = ""
+    layout = data["layout"]
+    data["layout"] = (  # window state and table headers (base64 text from Qt); anything else is ignored
+        {
+            k: v
+            for k, v in layout.items()
+            if isinstance(k, str) and isinstance(v, str) and v.isascii() and len(v) < 20000
+        }
+        if isinstance(layout, dict)
+        else {}
+    )
     shortcuts = data["shortcuts"]
     data["shortcuts"] = (
         {k: v for k, v in shortcuts.items() if isinstance(k, str) and isinstance(v, str)}

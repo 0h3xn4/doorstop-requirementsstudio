@@ -84,8 +84,9 @@ def make_widget(session: ProjectSession, adef: AttributeDef, on_change: Callable
     widget: QWidget
     if adef.type == "enum" and adef.vocab:
         combo = QComboBox()
-        if not adef.required:
-            combo.addItem("")
+        combo.addItem(
+            ""
+        )  # a value that is not set must show as empty, not as the first choice (that opened items "dirty")
         combo.addItems(session.cfg.vocab.values(adef.vocab))
         combo.currentTextChanged.connect(on_change)
         widget = combo

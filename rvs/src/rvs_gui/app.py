@@ -1166,6 +1166,11 @@ class MainWindow(QMainWindow):
         raw = userconfig.load()["geometry"]
         if raw:
             self.restoreGeometry(QByteArray.fromBase64(raw.encode("ascii")))
+        layout = userconfig.load()["layout"]
+        if layout.get("state"):
+            self.restoreState(QByteArray.fromBase64(layout["state"].encode("ascii")))  # docks and their visibility
+        if layout.get("items_header"):
+            self.table.horizontalHeader().restoreState(QByteArray.fromBase64(layout["items_header"].encode("ascii")))
 
     def ask_unsaved(self) -> str:
         """'save', 'discard' or 'cancel': what to do with edits that are not saved (overridden in tests)."""
@@ -1233,7 +1238,14 @@ class MainWindow(QMainWindow):
                 return
         if self._help is not None:
             self._help.close()
-        userconfig.update(geometry=bytes(self.saveGeometry().toBase64().data()).decode("ascii"))
+
+        def b64(data: QByteArray) -> str:
+            return bytes(data.toBase64().data()).decode("ascii")
+
+        userconfig.update(
+            geometry=b64(self.saveGeometry()),
+            layout={"state": b64(self.saveState()), "items_header": b64(self.table.horizontalHeader().saveState())},
+        )
         super().closeEvent(event)
 
     # creating #################################################################

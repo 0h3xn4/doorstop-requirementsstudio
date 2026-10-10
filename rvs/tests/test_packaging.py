@@ -476,7 +476,10 @@ def test_scripts_work_in_temporary_folders_and_the_lock_script_never_invents_has
 def test_ci_workflow_runs_three_pythons_and_starts_the_gui_offscreen():
     import yaml
 
-    workflow = yaml.safe_load((ROOT.parent / ".github" / "workflows" / "rvs-ci.yml").read_text())
+    path = ROOT.parent / ".github" / "workflows" / "rvs-ci.yml"
+    if not path.is_file():
+        pytest.skip("the workflow lives in the repository root, which a source distribution does not contain")
+    workflow = yaml.safe_load(path.read_text())
     assert workflow["jobs"]["test"]["strategy"]["matrix"]["python"] == ["3.11", "3.12", "3.13"]
     steps = " ".join(str(s.get("run", "")) for s in workflow["jobs"]["test"]["steps"])
     assert "QT_QPA_PLATFORM" in str(workflow["jobs"]["test"]["env"]) and "rvs_gui" in steps

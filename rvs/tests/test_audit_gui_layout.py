@@ -118,3 +118,28 @@ def test_an_item_without_problems_says_so(win: MainWindow):
 
 def test_search_field_is_a_line_edit_with_a_name(win: MainWindow):
     assert isinstance(win.filter_bar.search, QLineEdit) and win.filter_bar.search.accessibleName() == "Search items"
+
+
+def test_window_layout_is_remembered_between_runs(qtbot, minimal_project):  # type: ignore[no-untyped-def]
+    from rvs_core import userconfig
+    from rvs_gui.app import MainWindow
+
+    first = MainWindow()
+    qtbot.addWidget(first)
+    first.table.horizontalHeader().resizeSection(0, 333)
+    first.close()
+    saved = userconfig.load()["layout"]
+    assert saved.get("state") and saved.get("items_header")
+    second = MainWindow()
+    qtbot.addWidget(second)
+    assert second.table.horizontalHeader().sectionSize(0) == 333
+
+
+def test_a_damaged_layout_setting_is_ignored(monkeypatch, tmp_path):  # type: ignore[no-untyped-def]
+    import json
+
+    from rvs_core import userconfig
+
+    (tmp_path / "settings.json").write_text(json.dumps({"layout": {"state": 5, "ok": "AAAA", "bad": "é"}}))
+    monkeypatch.setenv("RVS_CONFIG_DIR", str(tmp_path))
+    assert userconfig.load()["layout"] == {"ok": "AAAA"}

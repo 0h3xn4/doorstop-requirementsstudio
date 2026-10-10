@@ -387,3 +387,16 @@ def test_a_failed_export_leaves_the_previous_file_untouched(win: MainWindow, qtb
         win.vcm_view.export_file(target)
     assert done.args[1] and target.read_text() == "previous content"
     assert not list(tmp_path.glob(".*.tmp"))
+
+
+def test_an_item_with_an_unset_required_choice_opens_clean(qtbot, minimal_project):  # type: ignore[no-untyped-def]
+    from rvs_core.adapter import DoorstopProject
+    from rvs_gui.app import MainWindow
+
+    proj = DoorstopProject.open(minimal_project)
+    proj.update_item("SYS-0001", attrs={"type": ""})
+    window = MainWindow()
+    qtbot.addWidget(window)
+    window.open_project(minimal_project)
+    window.select_item("SYS-0001")
+    assert not window.editor.is_dirty()

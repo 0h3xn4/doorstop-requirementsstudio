@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.2
+links:
+- SYS-0002: mLfyuqbvifY0nDIIcOD5T0fmPfTgp5_XhwhYqhM47dU=
+normative: true
+owner: eps
+priority: medium
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: approved
+text: |
+  The EPS shall store at least 24 Wh in the battery.
+title: 'Battery 24 #2'
+type: performance
+verify_level: subsystem
+verify_method: test

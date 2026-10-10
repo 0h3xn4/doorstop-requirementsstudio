@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.23
+links:
+- SYS-0023: 1CULhGbvQ4XCSR1yM21vRgUSaJ23sPbJLGBH-qPua-s=
+normative: true
+owner: pld
+priority: medium
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The payload shall image a swath of at least 20 km.
+title: 'Swath 20 #23'
+type: performance
+verify_level: subsystem
+verify_method: test

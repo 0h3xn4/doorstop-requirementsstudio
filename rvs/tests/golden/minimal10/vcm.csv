@@ -1,0 +1,13 @@
+# Verification control matrix
+# Project: Minimal example
+# Baseline: working copy
+# Generated: 2026-01-02 03:04:05 by golden
+# Tool: rvs 0.1.0 (doorstop 3.2)
+# Column layout is a placeholder (TODO-STANDARD): it does not yet follow ECSS-E-ST-10-02C.
+Requirement,Title,Method,Level,Verification item,Status,Evidence
+SYS-0001,Payload power,analysis,system,,not verified,
+SYS-0002,Eclipse operation,test,system,,not verified,
+SYS-0003,Mass budget,inspection,system,,not verified,
+EPS-0001,Battery capacity,analysis,subsystem,VER-0001,planned,
+EPS-0002,Array output,test,subsystem,VER-0002,planned,
+EPS-0003,EPS mass,inspection,subsystem,VER-0003,planned,

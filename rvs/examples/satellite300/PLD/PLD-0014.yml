@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.14
+links:
+- SYS-0014: i_8ejlNyfKx43_glckKCSMH2TdIi9oE06PG7jeNfUpQ=
+normative: true
+owner: pld
+priority: medium
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The payload shall image a swath of at least 1000 km.
+title: 'Swath 1000 #14'
+type: performance
+verify_level: subsystem
+verify_method: test

@@ -1,0 +1,57 @@
+{
+ "$schema": "http://json-schema.org/draft-07/schema#",
+ "type": "object",
+ "additionalProperties": false,
+ "required": [
+  "rvs_schema_version",
+  "terms",
+  "acronyms"
+ ],
+ "properties": {
+  "rvs_schema_version": {
+   "type": "integer",
+   "minimum": 0
+  },
+  "terms": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+     "term",
+     "definition"
+    ],
+    "properties": {
+     "term": {
+      "type": "string",
+      "minLength": 1
+     },
+     "definition": {
+      "type": "string"
+     }
+    }
+   }
+  },
+  "acronyms": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+     "acronym",
+     "expansion"
+    ],
+    "properties": {
+     "acronym": {
+      "type": "string",
+      "minLength": 2
+     },
+     "expansion": {
+      "type": "string",
+      "minLength": 1
+     }
+    }
+   }
+  }
+ }
+}

@@ -1,0 +1,41 @@
+# Quality rules. Word and term lists below are seeds from the spec examples; the company lists are
+# placeholders (TODO-COMPANY). Finding codes are RVS-RULE-<ID in capitals>.
+rvs_schema_version: 1
+change_control:
+  # Editing an item in one of these statuses requires a reason (spec: why is mandatory once baselined).
+  reason_required_statuses: [baselined]
+rules:
+  - id: shall-present
+    severity: error
+    enabled: true
+    description: "The statement uses 'shall'."
+    params: {keyword: shall}
+  - id: single-statement
+    severity: warning
+    enabled: true
+    description: "One requirement per statement."
+    params: {keyword: shall, max: 1}
+  - id: vague-words
+    severity: warning
+    enabled: true
+    description: "The statement avoids vague words."
+    params:
+      words: ["adequate", "as appropriate", "user-friendly"]   # TODO-COMPANY
+  - id: no-implementation
+    severity: warning
+    enabled: true
+    description: "A functional requirement does not prescribe implementation."
+    params:
+      terms: []   # TODO-COMPANY
+  - {id: verify-method-set, severity: warning, enabled: true, description: "A verification method is set."}
+  - {id: has-parent, severity: error, enabled: true, description: "The item has a parent unless it is in the root document."}
+  - id: verified-when-approved
+    severity: error
+    enabled: true
+    description: "An approved item has at least one verification link."
+    params: {statuses: [approved, baselined]}
+  - id: undefined-acronym
+    severity: warning
+    enabled: true
+    description: "Acronyms used in text are defined in the glossary."
+    params: {min_length: 2, ignore: [GB, MB, TB, KB]}   # units and other all-caps words that are not acronyms

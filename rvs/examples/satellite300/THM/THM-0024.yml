@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.24
+links:
+- SYS-0024: CuXgiyO2Vebay2NDxG9ZWBLK7Cz8GevytYF8zZT3K-4=
+normative: true
+owner: thm
+priority: low
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The MLI blanket shall cover at least 5 percent of the external surface.
+title: 'MLI 5 #24'
+type: design
+verify_level: subsystem
+verify_method: inspection

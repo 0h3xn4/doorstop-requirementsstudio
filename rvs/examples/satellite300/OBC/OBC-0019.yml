@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.19
+links:
+- SYS-0019: 8UE1BDIvz7Z8Q-4eBQmbY2BiQ7h4yk0-AnEwAR7T1tE=
+normative: true
+owner: obc
+priority: high
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The OBC shall collect housekeeping telemetry every 1000 seconds.
+title: 'Housekeeping 1000 #19'
+type: functional
+verify_level: subsystem
+verify_method: test

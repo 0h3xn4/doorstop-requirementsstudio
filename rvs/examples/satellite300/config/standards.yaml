@@ -1,0 +1,7 @@
+# Values that standards or company rules must supply. Never filled in by the tool (spec rule 15).
+# Replace `value: null` and set `status: resolved` once the source text is available.
+rvs_schema_version: 1
+placeholders:
+  - {id: ecss-e-st-10-02c.vcm-annex-layout, description: "VCM column set and order per ECSS-E-ST-10-02C annex", value: null, status: TODO-STANDARD}
+  - {id: ecss-e-st-10-06c.requirement-wording-rules, description: "Requirement wording rules per ECSS-E-ST-10-06C", value: null, status: TODO-STANDARD}
+  - {id: ecss-m-st-40c.baseline-naming, description: "Baseline/configuration item naming per ECSS-M-ST-40C", value: null, status: TODO-STANDARD}

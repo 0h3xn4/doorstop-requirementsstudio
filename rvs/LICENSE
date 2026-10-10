@@ -1,0 +1,15 @@
+Requirements & Verification Studio (RVS)
+
+Copyright (c) the owners of this repository. All rights reserved.
+
+RVS is proprietary software for internal use. It may not be copied, distributed or made available to third parties
+without the written permission of its owners. See docs/DECISIONS.md (D10): the dependencies are deliberately limited to
+permissive and LGPL licences so that a later release under another licence stays possible, but no such licence has
+been granted.
+
+RVS is built on third-party open-source packages (Doorstop, Qt for Python, ReportLab, openpyxl and others), each under its
+own licence. Their licence texts are listed in THIRD-PARTY-LICENSES.txt, which every release bundle contains
+(`sh scripts/sbom.sh` produces the same report for a source checkout).
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.

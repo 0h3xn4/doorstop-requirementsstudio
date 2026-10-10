@@ -1,0 +1,18 @@
+active: true
+derived: false
+header: ''
+level: '1.10'
+links: []
+normative: true
+owner: mis
+priority: high
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The mission shall be conducted in a 5 km sun-synchronous LEO orbit.
+title: 'Orbit 5 #10'
+type: operational
+verify_level: system
+verify_method: analysis

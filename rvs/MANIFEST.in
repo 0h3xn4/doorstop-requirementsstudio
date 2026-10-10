@@ -1,0 +1,12 @@
+# What the source distribution (python -m build --sdist) contains besides the Python package: everything needed to
+# run the test suite, rebuild the guide and the release, and read the documentation.
+include LICENSE README.md CLAUDE.md pyproject.toml MANIFEST.in .gitignore .gitattributes
+graft docs
+graft examples
+graft packaging
+graft scripts
+graft tests
+global-exclude __pycache__ *.py[cod]
+prune examples/minimal10/.rvs-cache
+prune examples/satellite300/.rvs-cache
+prune tests/.hypothesis

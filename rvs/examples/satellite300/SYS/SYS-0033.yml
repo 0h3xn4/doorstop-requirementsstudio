@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.33
+links:
+- MIS-0009: wdXPFruSiLuvIYAjdghDPUWpy5NFPA1glziQOX28M90=
+normative: true
+owner: sys
+priority: low
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The spacecraft shall operate autonomously for 28 hours without ground contact.
+title: 'Autonomy 28 #33'
+type: operational
+verify_level: system
+verify_method: test

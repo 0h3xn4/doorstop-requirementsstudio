@@ -1,0 +1,18 @@
+active: true
+derived: true
+header: ''
+level: 1.7
+link_verifies:
+- EPS-0032
+links: []
+normative: true
+proc_id: VER-EPS-0032
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+text: |
+  Verify EPS-0032 by test.
+title: Verify EPS-0032
+v_status: planned
+verify_level: subsystem
+verify_method: test

@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.2
+links:
+- SYS-0002: mLfyuqbvifY0nDIIcOD5T0fmPfTgp5_XhwhYqhM47dU=
+normative: true
+owner: str
+priority: medium
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The structure shall withstand a quasi-static load of 3 g.
+title: 'Load 3 #2'
+type: environmental
+verify_level: subsystem
+verify_method: analysis

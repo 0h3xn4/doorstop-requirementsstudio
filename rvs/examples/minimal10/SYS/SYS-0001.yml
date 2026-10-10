@@ -1,0 +1,18 @@
+active: true
+derived: false
+header: ''
+level: 1.1
+links: []
+normative: true
+owner: systems
+priority: high
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The spacecraft shall provide electrical power to all payloads.
+title: Payload power
+type: functional
+verify_level: system
+verify_method: analysis

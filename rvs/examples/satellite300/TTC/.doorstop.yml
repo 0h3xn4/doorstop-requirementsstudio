@@ -1,0 +1,14 @@
+attributes:
+  defaults:
+    status: draft
+  reviewed:
+  - title
+  - type
+  - verify_level
+  - verify_method
+settings:
+  digits: 4
+  itemformat: yaml
+  parent: SYS
+  prefix: TTC
+  sep: '-'

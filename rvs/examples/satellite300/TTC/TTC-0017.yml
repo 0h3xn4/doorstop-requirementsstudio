@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.17
+links:
+- SYS-0017: M1tdcq3FAbKwnrD06vKhVPlTZ0DYNS2fSbTwaa4AZSM=
+normative: true
+owner: ttc
+priority: medium
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: approved
+text: |
+  The TT&C subsystem shall support a downlink rate of 435 kbit/s.
+title: 'Downlink 435 #17'
+type: performance
+verify_level: subsystem
+verify_method: test

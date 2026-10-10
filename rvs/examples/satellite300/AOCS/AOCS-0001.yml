@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.1
+links:
+- SYS-0001: G9Ywr_JJNE_NbFnXLG3u8PwG4XsSSkrE3c8kEtPVQsc=
+normative: true
+owner: aocs
+priority: high
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: reviewed
+text: |
+  The AOCS shall estimate attitude. The AOCS shall report the estimate every second.
+title: 'Accuracy 0.1 #1'
+type: performance
+verify_level: subsystem
+verify_method: analysis

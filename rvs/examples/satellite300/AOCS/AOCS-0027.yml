@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.27
+links:
+- SYS-0027: FVgXGtCaN8yQxak6KBGvV4FLjBFnvzaY-DGynRlf0TA=
+normative: true
+owner: aocs
+priority: low
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: approved
+text: |
+  The AOCS shall slew the spacecraft by 30 degrees within 0.5 minutes.
+title: 'Slew 0.5 #27'
+type: performance
+verify_level: subsystem
+verify_method: test

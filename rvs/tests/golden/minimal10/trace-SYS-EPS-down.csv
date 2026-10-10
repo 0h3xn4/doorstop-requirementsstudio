@@ -1,0 +1,9 @@
+# Traceability SYS → EPS
+# Project: Minimal example
+# Baseline: working copy
+# Generated: 2026-01-02 03:04:05 by golden
+# Tool: rvs 0.1.0 (doorstop 3.2)
+Source,Title,Linked items,Link types,Gap
+SYS-0001,Payload power,EPS-0002,parent,
+SYS-0002,Eclipse operation,EPS-0001,parent,
+SYS-0003,Mass budget,EPS-0003,parent,

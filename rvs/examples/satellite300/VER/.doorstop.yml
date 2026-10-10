@@ -1,0 +1,13 @@
+attributes:
+  defaults:
+    v_status: planned
+  reviewed:
+  - title
+  - verify_level
+  - verify_method
+settings:
+  digits: 4
+  itemformat: yaml
+  parent: SYS
+  prefix: VER
+  sep: '-'

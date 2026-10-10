@@ -1,0 +1,36 @@
+{
+  "title": "Impact of changing SYS-0002",
+  "columns": [
+    "Item",
+    "Depth",
+    "Via",
+    "Title"
+  ],
+  "rows": [
+    [
+      "EPS-0001",
+      "1",
+      "parent",
+      "Battery capacity"
+    ],
+    [
+      "VER-0001",
+      "2",
+      "verifies",
+      "Eclipse power analysis"
+    ]
+  ],
+  "flags": [
+    null,
+    null
+  ],
+  "notes": [],
+  "provenance": {
+    "project": "Minimal example",
+    "baseline": "working copy",
+    "generated": "2026-01-02 03:04:05",
+    "user": "golden",
+    "tool_version": "0.1.0",
+    "framework_version": "3.2"
+  }
+}

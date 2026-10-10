@@ -1,0 +1,25 @@
+# Typed links between items (besides Doorstop parent/child links, which are the document hierarchy).
+# Each type is stored on the *source* item in the attribute named here, as a list of item IDs.
+# source/target list the document kinds the link may connect.
+rvs_schema_version: 1
+types:
+  satisfies:
+    attribute: link_satisfies
+    source: [requirements]
+    target: [requirements]
+    symmetric: false
+  verifies:
+    attribute: link_verifies
+    source: [verification]
+    target: [requirements]
+    symmetric: false
+  refines:
+    attribute: link_refines
+    source: [requirements]
+    target: [requirements]
+    symmetric: false
+  conflicts-with:
+    attribute: link_conflicts
+    source: [requirements]
+    target: [requirements]
+    symmetric: true

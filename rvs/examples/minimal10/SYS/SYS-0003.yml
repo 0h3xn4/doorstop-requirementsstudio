@@ -1,0 +1,18 @@
+active: true
+derived: false
+header: ''
+level: 1.3
+links: []
+normative: true
+owner: systems
+priority: high
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The spacecraft mass shall not exceed 50 kg.
+title: Mass budget
+type: performance
+verify_level: system
+verify_method: inspection

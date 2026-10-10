@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.7
+links:
+- SYS-0007: k3sYca4JqigXMVKll29BUppFoDFJPfiCBo4hx-2HCZI=
+normative: true
+owner: str
+priority: high
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The structure shall have a first natural frequency above 100 Hz.
+title: 'Frequency 100 #7'
+type: performance
+verify_level: subsystem
+verify_method: test

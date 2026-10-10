@@ -1,0 +1,18 @@
+active: true
+derived: true
+header: ''
+level: 1.1
+link_verifies:
+- EPS-0001
+links: []
+normative: true
+proc_id: VER-EPS-A-001
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+text: |
+  Verify EPS-0001: eclipse power analysis.
+title: Eclipse power analysis
+v_status: planned
+verify_level: system
+verify_method: analysis

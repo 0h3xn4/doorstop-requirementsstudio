@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.26
+links:
+- SYS-0026: 2vmvR9MVTgOjreEHm_EYO4SxeKP7fvmaJTlkKVmUhxk=
+normative: true
+owner: obc
+priority: medium
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: reviewed
+text: |
+  The OBC shall execute the control cycle every 64 ms.
+title: 'Cycle 64 #26'
+type: performance
+verify_level: subsystem
+verify_method: test

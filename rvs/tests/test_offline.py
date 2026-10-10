@@ -1,0 +1,96 @@
+"""Run the app with all networking disabled (spec rule 3, DEVIATIONS V01)."""
+
+import subprocess
+import sys
+import textwrap
+from pathlib import Path
+
+PROBE = textwrap.dedent(
+    """
+    import os, sys, socket
+    os.environ["QT_QPA_PLATFORM"] = "offscreen"
+    opened = []
+    def deny(*a, **k):
+        opened.append(a); raise OSError("network disabled by test")
+    for name in ("connect", "connect_ex", "bind", "listen", "sendto"):
+        setattr(socket.socket, name, deny)
+    socket.create_connection = deny
+    socket.getaddrinfo = deny
+    import rvs_core, rvs_cli, rvs_gui
+    from rvs_gui.app import create_app, create_main_window
+    app = create_app([])
+    win = create_main_window()
+    win.show()
+    app.processEvents()
+    win.close()
+    from rvs_core.validate import validate_project
+    report = validate_project(__import__("pathlib").Path(sys.argv[1]))
+    assert report.exit_code == 0, [f.format() for f in report.findings]
+    # every exporter (HTML, DOCX, PDF, XLSX, CSV import/export) must also work with the network blocked
+    from datetime import datetime
+    from rvs_core.exporters.catalog import all_outputs
+    from rvs_core.matrices import Provenance
+    prov = Provenance("0", "3", "p", "w", datetime(2026, 1, 1), "u")
+    outs = all_outputs(report.config, report.items, report.graph, prov, trace=("SYS", "EPS", "down"), impact_uid="SYS-0002")
+    assert len(outs) == 30 and all(outs.values())
+    # baselines (Git via dulwich) and diffs must work offline too
+    import shutil, tempfile
+    from pathlib import Path
+    from rvs_core.changecontrol.baselines import create_baseline
+    from rvs_core.changecontrol.diff import diff_snapshots, load_snapshot
+    from rvs_core.vcs.git import GitRepo
+    with tempfile.TemporaryDirectory() as d:
+        copy = Path(d) / "p"
+        shutil.copytree(sys.argv[1], copy, ignore=shutil.ignore_patterns(".rvs-cache"))
+        GitRepo.init(copy)
+        create_baseline(copy, "B1", "offline", user="probe")
+        assert diff_snapshots(load_snapshot(copy, "B1"), load_snapshot(copy, None)).changes == ()
+    import json
+    banned = sorted(m for m in sys.modules if m.split(".")[0] in {
+        "requests", "urllib3", "bottle", "plantuml_markdown", "ftplib", "smtplib", "xmlrpc", "socketserver",
+        "ssl", "asyncio", "telnetlib", "imaplib", "poplib", "webbrowser"}
+        or m in {"http.client", "http.server", "urllib.request", "PySide6.QtNetwork"})
+    # RVS registers inert placeholders for bottle/plantuml_markdown; only real (file-backed) modules count.
+    banned = [m for m in banned if getattr(sys.modules[m], "__file__", None)]
+    print(json.dumps({"opened": opened, "network_modules": banned,
+                      "doorstop_loaded": "doorstop" in sys.modules}))
+    """
+)
+
+
+def test_app_starts_with_networking_disabled():
+    import json
+
+    project = Path(__file__).resolve().parents[1] / "examples" / "minimal10"
+    out = subprocess.run(
+        [sys.executable, "-I", "-c", PROBE, str(project)],
+        capture_output=True, text=True, cwd=Path(__file__).parent, timeout=120, check=False,
+    )  # fmt: skip
+    assert out.returncode == 0, out.stderr
+    data = json.loads(out.stdout.strip().splitlines()[-1])
+    assert data["opened"] == []
+    assert data["doorstop_loaded"]
+    # Strict (V01 resolved): no network-capable module is imported at all, Doorstop included.
+    assert data["network_modules"] == []
+
+
+def test_no_source_file_can_reach_the_network_or_start_other_programs():
+    """A static guard next to the runtime probe: the probe only sees modules Python imports, not Qt's own networking,
+    a browser launch or a subprocess."""
+    import re
+
+    forbidden = re.compile(
+        r"\b(webbrowser|QDesktopServices|openUrl|QtNetwork|QNetworkAccessManager|QWebEngine|urllib\.request|http\.client"
+        r"|import requests|import socket|from socket|import ssl|smtplib|ftplib|telnetlib|subprocess|os\.system|os\.popen)\b"
+    )
+    root = Path(__file__).resolve().parents[1] / "src"
+    skipped = {"_offline_guard.py"}  # names the modules it blocks
+    offenders = []
+    for path in root.rglob("*.py"):
+        if path.name in skipped:
+            continue
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            code = line.split("#", 1)[0]
+            if forbidden.search(code):
+                offenders.append(f"{path.relative_to(root)}:{number}: {line.strip()}")
+    assert not offenders, offenders

@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.1
+links:
+- SYS-0001: G9Ywr_JJNE_NbFnXLG3u8PwG4XsSSkrE3c8kEtPVQsc=
+normative: true
+owner: eps
+priority: high
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: reviewed
+text: |
+  The EPS provides a regulated 28 V main bus.
+title: 'Bus voltage 24 #1'
+type: functional
+verify_level: subsystem
+verify_method: test

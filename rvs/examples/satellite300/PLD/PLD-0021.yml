@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.21
+links:
+- SYS-0021: v850U3A7QURAwmPTcYL5x0y5028Z4XAUQaoRYiT_1O0=
+normative: true
+owner: pld
+priority: low
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: reviewed
+text: |
+  The payload shall generate no more than 5 Mbit/s of raw data.
+title: 'Data rate 5 #21'
+type: interface
+verify_level: subsystem
+verify_method: test

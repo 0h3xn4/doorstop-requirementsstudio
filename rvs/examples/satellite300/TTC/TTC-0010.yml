@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: '1.10'
+links:
+- SYS-0010: MfuVUxyDt-JhL0j1tpRyBg-klHM0_bOdtwAyuikoSqk=
+normative: true
+owner: ttc
+priority: high
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The TT&C subsystem shall accept telecommands at 2 kbit/s.
+title: 'Uplink 2 #10'
+type: interface
+verify_level: subsystem
+verify_method: test

@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.1
+links:
+- SYS-0002: 5ezWooK0khnSdZKD62sTBaC0E_DI9U9r1bAoivfjC2M=
+normative: true
+owner: systems
+priority: high
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The battery shall store at least the energy needed for one eclipse.
+title: Battery capacity
+type: design
+verify_level: subsystem
+verify_method: analysis

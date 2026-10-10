@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.28
+links:
+- SYS-0028: _RDY6UF7QeWuYvte024YOTiDPVb4M_ynaMcji9nBpEs=
+normative: true
+owner: pld
+priority: high
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The payload shall achieve a ground sample distance of 1000 m.
+title: 'Resolution 1000 #28'
+type: performance
+verify_level: subsystem
+verify_method: analysis

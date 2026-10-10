@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.12
+links:
+- SYS-0012: nVF9cZL9oim5rvM2iMeviLCeVEhRhC2DlZdY6YYz7KU=
+normative: true
+owner: pld
+priority: low
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The payload shall generate no more than 500 Mbit/s of raw data.
+title: 'Data rate 500 #12'
+type: interface
+verify_level: subsystem
+verify_method: test

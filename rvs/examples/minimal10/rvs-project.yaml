@@ -1,0 +1,14 @@
+documents:
+- kind: requirements
+  prefix: SYS
+  title: System requirements
+- kind: requirements
+  parent: SYS
+  prefix: EPS
+  title: Electrical power subsystem requirements
+- kind: verification
+  parent: SYS
+  prefix: VER
+  title: Verification plan
+name: Minimal example
+rvs_schema_version: 1

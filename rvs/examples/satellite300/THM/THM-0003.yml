@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.3
+links:
+- SYS-0003: nPF7VZt_bgPjjp9ncU-TVR3gp4OsSrlUnAZ67q_1jjw=
+normative: true
+owner: thm
+priority: low
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The MLI blanket shall cover at least -10 percent of the external surface.
+title: 'MLI -10 #3'
+type: design
+verify_level: subsystem
+verify_method: inspection

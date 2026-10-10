@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.23
+links:
+- SYS-0023: 1CULhGbvQ4XCSR1yM21vRgUSaJ23sPbJLGBH-qPua-s=
+normative: true
+owner: eps
+priority: medium
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The solar array shall deliver 50 W at end of life.
+title: 'Array 50 #23'
+type: performance
+verify_level: subsystem
+verify_method: analysis

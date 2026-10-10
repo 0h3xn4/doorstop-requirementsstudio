@@ -1,0 +1,18 @@
+active: true
+derived: true
+header: ''
+level: 1.2
+link_verifies:
+- EPS-0002
+links: []
+normative: true
+proc_id: VER-EPS-T-001
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+text: |
+  Verify EPS-0002: array output test.
+title: Array output test
+v_status: planned
+verify_level: subsystem
+verify_method: test

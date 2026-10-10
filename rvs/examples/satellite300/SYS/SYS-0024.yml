@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.24
+links:
+- MIS-0012: YqujwWLSz0vdRxBuHpEghorOzCQ04q7yog7pY0oK5ic=
+normative: true
+owner: sys
+priority: low
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The spacecraft shall point the payload with an error below 120 arcseconds.
+title: 'Pointing 120 #24'
+type: performance
+verify_level: system
+verify_method: analysis

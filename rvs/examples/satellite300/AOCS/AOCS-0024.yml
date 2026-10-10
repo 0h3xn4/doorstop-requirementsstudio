@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.24
+links:
+- SYS-0024: CuXgiyO2Vebay2NDxG9ZWBLK7Cz8GevytYF8zZT3K-4=
+normative: true
+owner: aocs
+priority: low
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The AOCS shall obtain a GNSS position fix within 0.1 minutes after power-on.
+title: 'GNSS 0.1 #24'
+type: functional
+verify_level: subsystem
+verify_method: test

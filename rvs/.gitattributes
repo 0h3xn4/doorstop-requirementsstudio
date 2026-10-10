@@ -1,0 +1,17 @@
+# Line endings. The repository root already normalises text; these entries are the RVS specifics.
+* text=auto
+*.sh  text eol=lf
+*.py  text eol=lf
+*.ps1 text eol=crlf
+
+# Byte-exact files: the example projects are compared byte for byte with what the generators write, the golden files
+# with the exporters' output, and the bundled guide with what scripts/build_guide.py builds. Never convert them.
+tests/golden/**                  -text
+examples/**                      -text
+src/rvs_core/guide/guide.html    -text
+
+# Binary
+*.png  binary
+*.woff binary
+*.ttf  binary
+*.xlsx binary

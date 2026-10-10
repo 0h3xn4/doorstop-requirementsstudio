@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.28
+links:
+- SYS-0028: _RDY6UF7QeWuYvte024YOTiDPVb4M_ynaMcji9nBpEs=
+normative: true
+owner: ttc
+priority: high
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The RF output power shall not exceed 38.4 dBm.
+title: 'RF output 38.4 #28'
+type: design
+verify_level: subsystem
+verify_method: test

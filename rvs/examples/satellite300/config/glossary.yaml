@@ -1,0 +1,29 @@
+acronyms:
+- acronym: AOCS
+  expansion: Attitude and Orbit Control Subsystem
+- acronym: EPS
+  expansion: Electrical Power Subsystem
+- acronym: GNSS
+  expansion: Global Navigation Satellite System
+- acronym: LEO
+  expansion: Low Earth Orbit
+- acronym: MLI
+  expansion: Multi-Layer Insulation
+- acronym: OBC
+  expansion: On-Board Computer
+- acronym: PCDU
+  expansion: Power Control and Distribution Unit
+- acronym: PLD
+  expansion: Payload
+- acronym: RF
+  expansion: Radio Frequency
+- acronym: SSO
+  expansion: Sun-Synchronous Orbit
+- acronym: TT&C
+  expansion: Telemetry, Tracking and Command
+- acronym: UHF
+  expansion: Ultra High Frequency
+rvs_schema_version: 1
+terms:
+- definition: Period in which the spacecraft is in the shadow of the Earth.
+  term: Eclipse

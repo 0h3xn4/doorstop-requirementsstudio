@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.38
+links:
+- SYS-0038: b1qJcMzp_N-axugUX_YDSTCnChFf2PqjWjDoc4QEPvc=
+normative: true
+owner: obc
+priority: medium
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The OBC shall execute the control cycle every 1000 ms.
+title: 'Cycle 1000 #38'
+type: performance
+verify_level: subsystem
+verify_method: test

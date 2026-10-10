@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: '1.30'
+links:
+- SYS-0030: -z_TMdCZ2ileMSEm9nDeSLibN7c_eSaXgHvooLnwsCM=
+normative: true
+owner: obc
+priority: low
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The OBC shall execute the control cycle every 256 ms.
+title: 'Cycle 256 #30'
+type: performance
+verify_level: subsystem
+verify_method: test

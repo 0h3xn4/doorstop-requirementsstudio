@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.9
+links:
+- SYS-0009: 4f13MQQ-Zs6gGTS2dnDHkwJZqDkZpZxOZ7AyiznJtC4=
+normative: true
+owner: pld
+priority: low
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The payload shall generate no more than 20 Mbit/s of raw data.
+title: 'Data rate 20 #9'
+type: interface
+verify_level: subsystem
+verify_method: test

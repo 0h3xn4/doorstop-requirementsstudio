@@ -1,0 +1,18 @@
+active: true
+derived: true
+header: ''
+level: 1.38
+link_verifies:
+- PLD-0007
+links: []
+normative: true
+proc_id: VER-PLD-0007
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+text: |
+  Verify PLD-0007 by analysis.
+title: Verify PLD-0007
+v_status: passed
+verify_level: subsystem
+verify_method: analysis

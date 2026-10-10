@@ -1,0 +1,19 @@
+active: true
+derived: false
+header: ''
+level: 1.27
+links:
+- SYS-0027: FVgXGtCaN8yQxak6KBGvV4FLjBFnvzaY-DGynRlf0TA=
+normative: true
+owner: eps
+priority: low
+ref: ''
+reviewed: null
+rvs_schema_version: 1
+status: draft
+text: |
+  The solar array shall deliver 24 W at end of life.
+title: 'Array 24 #27'
+type: performance
+verify_level: subsystem
+verify_method: analysis

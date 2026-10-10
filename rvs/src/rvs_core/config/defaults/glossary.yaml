@@ -1,0 +1,4 @@
+# Project glossary. Acronyms used in statements must be listed here (rule undefined-acronym).
+rvs_schema_version: 1
+terms: []        # - {term: "Eclipse", definition: "..."}
+acronyms: []     # - {acronym: "EPS", expansion: "Electrical Power Subsystem"}

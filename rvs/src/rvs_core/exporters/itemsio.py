@@ -11,7 +11,7 @@ import io
 import re
 import sys
 import zipfile
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
@@ -32,7 +32,7 @@ from rvs_core.matrices.provenance import Provenance
 CORE_COLUMNS = ["id", "document", "level", "normative", "derived", "active", "header", "ref", "text", "parents"]
 ALIASES = {"uid": "id", "prefix": "document", "statement": "text", "parent": "parents"}
 HIDDEN_ATTRIBUTES = {"rvs_schema_version"}
-_UID = re.compile(r"^[A-Z][A-Z0-9]*-\d+$")
+_UID = re.compile(r"^[A-Z][A-Z0-9]*-[0-9]+\Z")
 _LEVEL = re.compile(r"^\d+(\.\d+)*$")
 _DATE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
 _TRUE, _FALSE = {"yes", "true", "1", "y"}, {"no", "false", "0", "n"}
@@ -128,7 +128,7 @@ def export_items_xlsx(cfg: ProjectConfig, items: Sequence[ItemData], prov: Prove
                         f"({XLSX_CELL_LIMIT:,}). Export the items as CSV or ReqIF instead."
                     )
         for c, name in enumerate(cols, start=1):
-            ws.cell(row=1, column=c, value=name)
+            set_text(ws.cell(row=1, column=c), name)
         for r, row in enumerate(rows, start=2):
             for c, value in enumerate(row, start=1):
                 cell = ws.cell(row=r, column=c)
@@ -151,7 +151,17 @@ def read_csv(data: bytes) -> list[dict[str, str]]:
     start = 0
     while start < len(lines) and lines[start].lstrip().startswith("#"):
         start += 1  # leading provenance/comment lines
-    reader = csv.reader(io.StringIO("".join(lines[start:]), newline=""))
+    reader = csv.reader(io.StringIO("".join(lines[start:]), newline=""), strict=True)
+    try:
+        return _csv_rows(reader, start)
+    except csv.Error as exc:  # an unterminated quote would otherwise swallow every row after it without a word
+        raise ValueError(
+            f"The CSV file is damaged near line {start + reader.line_num} ({exc}). Check for a quote character that is "
+            "not closed; open the file in a text editor to see it."
+        ) from None
+
+
+def _csv_rows(reader: Any, start: int) -> list[dict[str, str]]:
     try:
         header = _canonical_header(next(reader))
     except StopIteration:
@@ -207,15 +217,10 @@ def read_xlsx(data: bytes) -> list[dict[str, str]]:
                 header = _canonical_header([_cell_text(v) for v in next(it)])
             except StopIteration:
                 continue
-            empty_run = 0
             for n, values in enumerate(it, start=2):
                 cells = [_cell_text(v) for v in values]
                 if not any(c.strip() for c in cells):
-                    empty_run += 1
-                    if empty_run >= 1000:
-                        break  # the rest of a sparse sheet is empty
                     continue
-                empty_run = 0
                 if n > MAX_XLSX_ROWS:
                     raise ValueError(f"The sheet {ws.title} has more than {MAX_XLSX_ROWS:,} rows")
                 row = {h: (cells[i] if i < len(cells) else "") for i, h in enumerate(header) if h}
@@ -308,6 +313,16 @@ def _split_escaped(text: str) -> list[str]:
     return [p for p in parts if p]
 
 
+def split_string_list(text: str) -> list[str]:
+    """The cell/field text of a string-list attribute as a list ('a, b' or 'a; b'; ``\\,`` keeps a comma in an entry)."""
+    return _split_escaped(text)
+
+
+def join_string_list(values: Sequence[Any]) -> str:
+    """The inverse of :func:`split_string_list`: entries containing a comma or semicolon survive a round trip."""
+    return ", ".join(_escape(str(v)) for v in values)
+
+
 def _split(text: str) -> list[str]:
     return [p.strip() for p in re.split(r"[,;]", text) if p.strip()]
 
@@ -373,18 +388,24 @@ def plan_import(
     *,
     why: str = "",
     root: Path | None = None,
+    baselined: Collection[str] | None = None,
+    all_uids: Collection[str] | None = None,
 ) -> ImportPlan:
     """Plan (dry run) an import. With ``root`` the plan also knows which items are in a baseline, so a change that needs
-    a reason is reported here and not half way through applying."""
+    a reason is reported here and not half way through applying. ``baselined`` and ``all_uids`` (every item that has a
+    file, inactive ones included) are read from ``root`` unless the caller already has them, which a dialog that plans on
+    every keystroke should."""
     plan = ImportPlan()
-    baselined = baselined_uids(root) if root is not None else frozenset()
+    if baselined is None:
+        baselined = baselined_uids(root) if root is not None else frozenset()
+    if all_uids is None:
+        all_uids = DoorstopProject.open(root).all_uids() if root is not None else frozenset()
     numbers: dict[str, int] = {}
-    for existing_item in items:
-        m = _UID.match(existing_item.uid)
+    for uid_in_use in {*(i.uid for i in items), *all_uids}:  # a number is also taken by an inactive item
+        m = _UID.match(uid_in_use)
         if m:
-            numbers[existing_item.document] = max(
-                numbers.get(existing_item.document, 0), int(existing_item.uid.rsplit("-", 1)[1])
-            )
+            prefix_in_use = uid_in_use.rsplit("-", 1)[0]
+            numbers[prefix_in_use] = max(numbers.get(prefix_in_use, 0), int(uid_in_use.rsplit("-", 1)[1]))
     known_columns = set(item_columns(cfg)) | HIDDEN_ATTRIBUTES
     existing = {i.uid: i for i in items}
     docs = {d.prefix: d for d in cfg.project.documents}
@@ -438,6 +459,13 @@ def plan_import(
                     row_no,
                     uid,
                     f"Write the ID as {canonical} (with its leading zeros), or leave it empty for a new item.",
+                )
+                continue
+            if item is None and uid in all_uids:
+                error(
+                    row_no,
+                    uid,
+                    f"{uid} is an inactive item. RVS lists and changes active items only; use a new ID (or leave it empty).",
                 )
                 continue
             if item is None and int(uid.rsplit("-", 1)[1]) <= numbers.get(prefix, 0):
@@ -633,6 +661,7 @@ def apply_import(
             ref=op.core.get("ref", ""),
         )
         if op.uid and item.uid != op.uid:
+            proj.discard_item(item.uid)  # an empty item under the wrong number must not stay behind
             raise ProjectError(
                 f"{op.uid} could not be created with that number (it became {item.uid}); the import stopped."
             )

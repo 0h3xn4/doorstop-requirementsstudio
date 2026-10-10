@@ -6,6 +6,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from rvs_core import atomicio
+
 DEFAULTS: dict[str, Any] = {"mode": "guided", "recent": [], "shortcuts": {}, "geometry": "", "theme": "light"}
 MAX_RECENT = 8
 
@@ -55,7 +57,7 @@ def save(data: dict[str, Any]) -> None:
         folder = config_dir()
         folder.mkdir(parents=True, exist_ok=True)
         merged = {k: v for k, v in {**DEFAULTS, **data}.items() if k in DEFAULTS}
-        _path().write_text(json.dumps(merged, indent=2, sort_keys=True), encoding="utf-8", newline="\n")
+        atomicio.write_text(_path(), json.dumps(merged, indent=2, sort_keys=True))
     except OSError:
         pass  # preferences are a convenience
 

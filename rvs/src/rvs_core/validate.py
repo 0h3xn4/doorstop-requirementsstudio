@@ -1,15 +1,16 @@
 """``rvs validate``: schema versions, configuration, RVS attribute rules, and Doorstop's own tree validation."""
 
+import os
 import re
 from dataclasses import dataclass, field
-from datetime import date
 from pathlib import Path
-from typing import Any
 
 from rvs_core.adapter import DocumentInfo, DoorstopProject, ItemData, ProjectError, UnreadableItemError
+from rvs_core.attrtypes import TYPE_HINT as _TYPE_HINT
+from rvs_core.attrtypes import type_ok as _type_ok
 from rvs_core.changecontrol.baselines import BaselineError, orphan_tags, verify_baseline
 from rvs_core.changecontrol.changes import ChangeRequestError, ChangeRequestStore, validate_change_requests
-from rvs_core.changecontrol.manifests import manifest_names
+from rvs_core.changecontrol.manifests import manifest_names, read_manifest
 from rvs_core.config import ConfigError, ProjectConfig, load_project_config
 from rvs_core.findings import Finding, Severity, sort_findings
 from rvs_core.rules import build_context, run_rules
@@ -31,7 +32,7 @@ FATAL_CODES = frozenset(
         "RVS-VALIDATION-FAILED",
     }
 )
-_UID = re.compile(r"^[A-Z][A-Z0-9]*-\d+$")
+_UID = re.compile(r"^[A-Z][A-Z0-9]*-[0-9]+\Z")
 
 
 @dataclass
@@ -49,51 +50,6 @@ class ValidationReport:
 
 def _fatal(code: str, message: str, hint: str, location: str = "") -> ValidationReport:
     return ValidationReport([Finding(code, Severity.ERROR, message, hint, location)], 3)
-
-
-def _is_str(v: Any) -> bool:
-    return isinstance(v, str)
-
-
-def _is_iso_date(value: str) -> bool:
-    if re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", value) is None:
-        return False
-    try:
-        date.fromisoformat(value)
-    except ValueError:
-        return False
-    return True
-
-
-def _type_ok(kind: str, value: Any) -> bool:
-    if kind in ("string", "text", "enum"):
-        return _is_str(value)
-    if kind == "int":
-        return isinstance(value, int) and not isinstance(value, bool)
-    if kind == "date":
-        return isinstance(value, date) or (_is_str(value) and _is_iso_date(value))
-    if kind == "string-list":
-        return isinstance(value, list) and all(_is_str(v) for v in value)
-    if kind == "uid-list":
-        return isinstance(value, list) and all(_is_str(v) and _UID.match(v) for v in value)
-    if kind == "ref-list":
-        return isinstance(value, list) and all(
-            isinstance(v, dict) and set(v) == {"docno", "revision"} and all(_is_str(x) for x in v.values())
-            for v in value
-        )
-    return False
-
-
-_TYPE_HINT = {
-    "string": "text",
-    "text": "text",
-    "enum": "one of the allowed values",
-    "int": "a whole number",
-    "date": "a date written YYYY-MM-DD",
-    "string-list": "a list of text values",
-    "uid-list": "a list of item IDs such as SYS-0001",
-    "ref-list": "a list of {docno, revision} entries",
-}
 
 
 def _doc_check(cfg: ProjectConfig):  # type: ignore[no-untyped-def]
@@ -312,7 +268,7 @@ def _doorstop_finding(level: str, message: str) -> Finding:
             "DOORSTOP-UNREVIEWED",
             Severity.INFO,
             message,
-            "Review the item to record the current text as approved.",
+            "Informational: RVS does not use Doorstop's review feature; ignore or filter this notice.",
             uid=uid,
         )
     return Finding(
@@ -324,6 +280,10 @@ def _doorstop_finding(level: str, message: str) -> Finding:
     )
 
 
+def _manifest_readable(root: Path, name: str) -> bool:
+    return isinstance(read_manifest(root, name).get("items"), dict)
+
+
 # Doorstop messages that RVS reports itself with its own codes (typed-link aware, no duplicates).
 _REPLACED_BY_RVS = ("no links from child document", "suspect link", "linked to unknown item")
 
@@ -333,9 +293,15 @@ def validate_project(root: Path, *, strict: bool = False, doorstop: bool = True)
     try:
         return _validate(Path(root), strict=strict, doorstop=doorstop)
     except Exception as exc:  # noqa: BLE001 - hand-edited files can break any assumption; report, do not crash
+        if os.environ.get("RVS_DEBUG"):
+            raise
+        from rvs_core.diagnostics import save_crash_report  # noqa: PLC0415 - only on the failure path
+
+        saved = save_crash_report(type(exc), exc, exc.__traceback__)
+        where = f" A crash report (no project content) was saved to {saved}." if saved else ""
         return _fatal(
             "RVS-VALIDATION-FAILED",
-            f"Validation stopped unexpectedly ({type(exc).__name__}). A file with content RVS cannot interpret is the usual cause.",
+            f"Validation stopped unexpectedly ({type(exc).__name__}). A file with content RVS cannot interpret is the usual cause.{where}",
             "Check the files you edited by hand most recently ('git diff' shows them). If nothing explains it, send the crash report.",
         )
 
@@ -400,6 +366,17 @@ def _validate(root: Path, *, strict: bool, doorstop: bool) -> ValidationReport:
             )
         )
     for baseline_name in manifest_names(root):
+        if not _manifest_readable(root, baseline_name):
+            findings.append(
+                Finding(
+                    "RVS-BASELINE-MODIFIED",
+                    Severity.ERROR,
+                    f"The manifest of baseline {baseline_name} cannot be read.",
+                    f"Restore baselines/{baseline_name}.yaml from the tagged commit (git checkout rvs/baseline/{baseline_name} -- baselines/{baseline_name}.yaml).",
+                    f"baselines/{baseline_name}.yaml",
+                )
+            )
+            continue
         try:
             findings.extend(verify_baseline(root, baseline_name, deep=False))
         except (GitError, BaselineError):

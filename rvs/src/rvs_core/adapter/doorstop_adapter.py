@@ -2,6 +2,7 @@
 
 import logging
 import os
+import shutil
 import threading
 import time
 from collections.abc import Callable, Iterable, Mapping
@@ -42,16 +43,56 @@ if getattr(yaml, "CSafeLoader", None) is not None:
     _doorstop_common.load_yaml.__defaults__ = (yaml.CSafeLoader,)
 
 
-def _duplicate_keys(path: Path) -> tuple[str, ...]:
-    """Top-level keys that occur twice in an item file (YAML loaders keep the last one without a word)."""
+MAX_ITEM_FILE_BYTES = 64 * 1024 * 1024
+MAX_YAML_EXPANSION = 2_000_000  # nodes after every alias is expanded: a few thousand is typical, millions is a bomb
+_YAML_CORE_TAG = "tag:yaml.org,2002:"
+
+
+def _loader() -> Any:
+    return getattr(yaml, "CSafeLoader", yaml.SafeLoader)  # the C parser: the pure-Python composer tripled the cold open
+
+
+def _expansion(node: yaml.Node, limit: int) -> int:
+    """Number of nodes in ``node`` with aliases expanded (what a naive walk of the loaded data would visit), stopping
+    once it exceeds ``limit``. Shared nodes are counted once, then reused, so the scan itself stays linear."""
+    sizes: dict[int, int] = {}
+    started: set[int] = set()  # a recursive anchor makes a node its own descendant: visit each node once
+    stack: list[tuple[yaml.Node, bool]] = [(node, False)]
+    while stack:
+        current, done = stack.pop()
+        key = id(current)
+        if key in sizes or (not done and key in started):
+            continue
+        started.add(key)
+        children: list[yaml.Node] = []
+        if isinstance(current, yaml.MappingNode):
+            children = [n for pair in current.value for n in pair]
+        elif isinstance(current, yaml.SequenceNode):
+            children = list(current.value)
+        if not done:
+            stack.append((current, True))
+            stack.extend((c, False) for c in children if id(c) not in sizes)
+        else:
+            total = 1 + sum(sizes.get(id(c), 1) for c in children)
+            sizes[key] = total
+            if total > limit:
+                return total
+    return sizes.get(id(node), 1)
+
+
+def _scan_item(path: Path) -> tuple[tuple[str, ...], str]:
+    """(top-level keys that occur twice, problem text or '') for an item file. YAML loaders keep the last duplicate
+    silently; a document whose aliases expand beyond ``MAX_YAML_EXPANSION`` would hang any later walk of its data."""
     try:
-        node = yaml.compose(
-            path.read_text(encoding="utf-8", errors="replace"), Loader=getattr(yaml, "CSafeLoader", yaml.SafeLoader)
-        )  # the C parser: the pure-Python composer tripled the cold open of 5,000 items
+        if path.stat().st_size > MAX_ITEM_FILE_BYTES:
+            return (), f"is larger than {MAX_ITEM_FILE_BYTES // (1024 * 1024)} MB"
+        node = yaml.compose(path.read_text(encoding="utf-8", errors="replace"), Loader=_loader())
     except (yaml.YAMLError, OSError):
-        return ()
+        return (), ""
     if not isinstance(node, yaml.MappingNode):
-        return ()
+        return (), ""
+    if _expansion(node, MAX_YAML_EXPANSION) > MAX_YAML_EXPANSION:
+        return (), "uses YAML aliases that expand to an unreasonable size"
     seen: set[str] = set()
     dups: list[str] = []
     for key, _value in node.value:
@@ -59,17 +100,20 @@ def _duplicate_keys(path: Path) -> tuple[str, ...]:
             if key.value in seen and key.value not in dups:
                 dups.append(key.value)
             seen.add(key.value)
-    return tuple(dups)
+    return tuple(dups), ""
 
 
 def _atomic_write_text(text: str, path: str, end: str = "\n") -> str:
     """Doorstop writes item files in place, so a crash half way leaves a truncated file. Write a temporary file next to
-    it and swap it in instead."""
-    tmp = f"{path}.{os.getpid()}.{threading.get_ident()}.tmp"
+    it and swap it in instead; the file keeps its permissions, and a symbolic link stays a link to the updated file."""
+    target = os.path.realpath(path)
+    tmp = f"{target}.{os.getpid()}.{threading.get_ident()}.tmp"
     try:
         with open(tmp, "w", encoding="utf-8", newline=end) as fh:  # noqa: PTH123, SIM115 - same call as Doorstop's
             fh.write(text)
-        os.replace(tmp, path)
+        if os.path.exists(target):
+            shutil.copymode(target, tmp)
+        os.replace(tmp, target)
     finally:
         if os.path.exists(tmp):
             os.unlink(tmp)
@@ -81,15 +125,39 @@ _doorstop_common.write_text = _atomic_write_text
 
 def _refuse_includes(root: Path) -> None:
     """Doorstop lets a document's .doorstop.yml pull in any file with ``!include``; a project from elsewhere could use
-    that to read local files into findings and exports. RVS projects never need it."""
+    that to read local files into findings and exports. RVS projects never need it. The file is composed (not just
+    searched for the word), so ``%TAG`` handles and other spellings of the tag are caught too."""
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [d for d in dirnames if d not in (".git", ".rvs-cache")]
         if ".doorstop.yml" in filenames:
             config = Path(dirpath, ".doorstop.yml")
-            if "!include" in config.read_text(encoding="utf-8", errors="replace"):
+            text = config.read_text(encoding="utf-8", errors="replace")
+            if "!include" in text or _custom_tags(text):
                 raise ProjectError(
-                    f"{config.relative_to(root)} uses '!include', which RVS does not allow: remove it from the file."
+                    f"{config.relative_to(root)} uses a custom YAML tag such as '!include', which RVS does not allow: "
+                    "remove it from the file."
                 )
+
+
+def _custom_tags(text: str) -> bool:
+    """Whether the YAML text uses any tag other than the standard ones."""
+    try:
+        nodes = [yaml.compose(text, Loader=_loader())]
+    except yaml.YAMLError:
+        return "%TAG" in text or "!<" in text  # unparsable anyway; Doorstop will report it
+    seen: set[int] = set()
+    while nodes:
+        node = nodes.pop()
+        if node is None or id(node) in seen:
+            continue
+        seen.add(id(node))
+        if not node.tag.startswith(_YAML_CORE_TAG):
+            return True
+        if isinstance(node, yaml.MappingNode):
+            nodes.extend(n for pair in node.value for n in pair)
+        elif isinstance(node, yaml.SequenceNode):
+            nodes.extend(node.value)
+    return False
 
 
 def yaml_parser_is_fast() -> bool:
@@ -289,8 +357,18 @@ class DoorstopProject:
                 obj = objects.get(os.path.normpath(str(path)))
                 if obj is None or not obj.active:
                     continue  # not an item file, or an inactive item (Document.items skips those too)
-                data = self._data(obj)
-                dups = _duplicate_keys(path)
+                dups, problem = _scan_item(path)
+                if problem:
+                    raise UnreadableItemError(
+                        f"{path.relative_to(self.root).as_posix()} {problem}. Fix or remove the file."
+                    )
+                try:
+                    data = self._data(obj)
+                except (ValueError, TypeError, AttributeError, KeyError, yaml.YAMLError, RecursionError) as exc:
+                    raise UnreadableItemError(
+                        f"{path.relative_to(self.root).as_posix()} has content RVS cannot read ({type(exc).__name__}): "
+                        "check its fields (dates, numbers and lists) after your last hand edit."
+                    ) from None
                 if dups:
                     data = replace(data, duplicate_keys=dups)
                 self.cache_stats.misses += 1
@@ -300,6 +378,21 @@ class DoorstopProject:
         if {r: v[0] for r, v in entries.items()} != {r: v[0] for r, v in cached.items()}:
             self._cache.save(prefix, config, entries)
         return sorted(result.values(), key=lambda i: i.uid)
+
+    def discard_item(self, uid: str) -> None:
+        """Delete an item file that was just created by mistake (never used for items the user has seen)."""
+        item = self._item(uid)
+        item.delete()
+        self._index.pop(uid, None)
+
+    def all_uids(self) -> set[str]:
+        """Every item ID that has a file, inactive items included (``items()`` lists active items only). The file name
+        is the ID, so no item is parsed."""
+        found: set[str] = set()
+        for doc in self._tree:
+            if str(doc.itemformat) == "yaml":
+                found.update(p.stem for p in self._item_files(Path(doc.path)))
+        return found
 
     def get_item(self, uid: str) -> ItemData:
         return self._data(self._item(uid))

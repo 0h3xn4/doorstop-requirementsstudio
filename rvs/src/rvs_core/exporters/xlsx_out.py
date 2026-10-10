@@ -4,8 +4,11 @@ import io
 import re
 
 from openpyxl import Workbook
+from openpyxl.drawing.spreadsheet_drawing import SpreadsheetDrawing
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
+from openpyxl.worksheet._writer import WorksheetWriter
+from openpyxl.writer.excel import ExcelWriter
 
 from rvs_core import textcheck
 from rvs_core.exporters.zipnorm import normalize_zip
@@ -14,6 +17,22 @@ from rvs_core.matrices.table import MatrixTable
 
 _GAP_FILL = {"unverified-approved": "FFD7D9", "orphan": "FFD7D9", "unverified": "FCF4D6", "childless": "FCF4D6"}
 
+
+def _write_worksheet_in_memory(self, ws):  # type: ignore[no-untyped-def]
+    """openpyxl spools every sheet to a temporary file named ``openpyxl.*`` in the system temp folder before zipping it;
+    that would leave requirement text outside the project (spec rule 11), and behind after a crash. Same steps as
+    ``ExcelWriter.write_worksheet``, with the sheet XML held in memory instead (DEVIATIONS: openpyxl patch)."""
+    ws._drawing = SpreadsheetDrawing()
+    ws._drawing.charts = ws._charts
+    ws._drawing.images = ws._images
+    writer = WorksheetWriter(ws, out=io.BytesIO())
+    writer.write()
+    ws._rels = writer._rels
+    self._archive.writestr(ws.path[1:], writer.out.getvalue())
+    self.manifest.append(ws)
+
+
+ExcelWriter.write_worksheet = _write_worksheet_in_memory
 
 XLSX_CELL_LIMIT = 32_767  # characters an Excel cell can hold; openpyxl silently cuts longer strings
 
@@ -82,7 +101,7 @@ def render_xlsx(table: MatrixTable) -> bytes:
     assert ws is not None
     ws.title = "Matrix"
     for c, name in enumerate(table.columns, start=1):
-        ws.cell(row=1, column=c, value=name)
+        set_text(ws.cell(row=1, column=c), name)
     wrap = Alignment(vertical="top", wrap_text=True)
     fills = {k: PatternFill("solid", fgColor=v) for k, v in _GAP_FILL.items()}
     for r, row in enumerate(table.rows, start=2):

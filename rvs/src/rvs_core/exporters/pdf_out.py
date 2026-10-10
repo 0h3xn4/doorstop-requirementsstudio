@@ -56,6 +56,36 @@ def _markup(spans: Spans) -> str:
     return "".join(out)
 
 
+LONG_TEXT = (
+    4000  # characters; a longer statement is laid out in pieces (one huge paragraph made ReportLab's cost cubic)
+)
+
+
+def _chunks(text: str, size: int = LONG_TEXT) -> list[str]:
+    """``text`` cut into pieces of at most ``size`` characters at line ends (or, for one enormous line, at spaces)."""
+    if len(text) <= size:
+        return [text]
+    pieces: list[str] = []
+    current = ""
+    for line in text.split("\n"):
+        while len(line) > size:
+            cut = line.rfind(" ", 0, size)
+            cut = cut if cut > 0 else size
+            if current:
+                pieces.append(current)
+                current = ""
+            pieces.append(line[:cut])
+            line = line[cut:].lstrip(" ")
+        if current and len(current) + len(line) + 1 > size:
+            pieces.append(current)
+            current = line
+        else:
+            current = f"{current}\n{line}" if current else line
+    if current:
+        pieces.append(current)
+    return pieces
+
+
 def render_pdf(doc: Doc) -> bytes:
     _register_fonts()
     page = landscape(A4) if doc.landscape else A4
@@ -79,6 +109,12 @@ def render_pdf(doc: Doc) -> bytes:
     story += [RLParagraph(_esc(n), note) for n in doc.notes]
 
     def markdown(text: str) -> list[Any]:
+        flow: list[Any] = []
+        for chunk in _chunks(text):
+            flow += _markdown_flow(chunk)
+        return flow
+
+    def _markdown_flow(text: str) -> list[Any]:
         flow: list[Any] = []
         for block in parse(text):
             if isinstance(block, Bullets):
@@ -140,7 +176,12 @@ def render_pdf(doc: Doc) -> bytes:
                 parts.append(RLParagraph(" · ".join(f"<b>{_esc(k)}:</b> {_esc(v)}" for k, v in block.fields), small))
             if block.rationale:
                 parts.append(RLParagraph(f"<b>Rationale:</b> {_esc(block.rationale)}", small))
-            story.append(KeepTogether(parts))
+            if len(block.text) > LONG_TEXT:
+                story += (
+                    parts  # a block that cannot fit one page anyway; KeepTogether would re-lay it out again and again
+                )
+            else:
+                story.append(KeepTogether(parts))
 
     def decorate(canvas, d) -> None:  # type: ignore[no-untyped-def]
         canvas.saveState()

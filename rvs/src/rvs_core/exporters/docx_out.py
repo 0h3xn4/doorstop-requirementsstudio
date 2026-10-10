@@ -6,6 +6,7 @@ from docx import Document
 from docx.enum.section import WD_ORIENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
+from docx.oxml.document import CT_Body
 from docx.oxml.ns import qn
 from docx.shared import Cm, Pt, RGBColor
 from docx.text.paragraph import Paragraph as DocxParagraph
@@ -13,6 +14,24 @@ from docx.text.paragraph import Paragraph as DocxParagraph
 from rvs_core.exporters.mdlite import Bullets, Spans, parse
 from rvs_core.exporters.model import DiffEntry, Doc, Entry, Heading, Paragraph, TableBlock
 from rvs_core.exporters.zipnorm import normalize_zip
+
+_SECT_PR = qn("w:sectPr")
+
+
+def _insert_before_section_properties(self, element):  # type: ignore[no-untyped-def]
+    """python-docx finds the closing ``w:sectPr`` by scanning every child of the body for each paragraph or table it
+    adds, which made a 5,000-requirement specification quadratic (47 s; 20,000 items: 9 minutes). The section properties
+    are always the last child, so look there (same XML, linear time)."""
+    last = next(self.iterchildren(reversed=True), None)
+    if last is not None and last.tag == _SECT_PR:
+        last.addprevious(element)
+    else:
+        self.append(element)
+    return element
+
+
+CT_Body._insert_p = _insert_before_section_properties
+CT_Body._insert_tbl = _insert_before_section_properties
 
 SANS, MONO = "IBM Plex Sans", "IBM Plex Mono"
 _GAP_FILL = {"unverified-approved": "FFD7D9", "orphan": "FFD7D9", "unverified": "FCF4D6", "childless": "FCF4D6"}

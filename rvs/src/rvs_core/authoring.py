@@ -13,6 +13,7 @@ from typing import Any
 
 from rvs_core import textcheck
 from rvs_core.adapter import DoorstopProject, ItemData
+from rvs_core.attrtypes import TYPE_HINT, type_ok
 from rvs_core.changecontrol.changes import ChangeRequestError, ChangeRequestStore
 from rvs_core.changecontrol.manifests import baselined_uids
 from rvs_core.config import load_project_config
@@ -71,7 +72,7 @@ class EditService:
                 raise ValueError(str(exc)) from exc
             if cr.status not in self._cfg.changes.open_statuses:
                 raise ValueError(
-                    f"{change_request} is {cr.status}, so edits cannot be attributed to it. Choose an open change request."
+                    f"{change_request} is {cr.status}, so edits cannot be attributed to it. Choose a change request whose status is open, in-review or approved."
                 )
 
     # helpers ################################################################
@@ -115,11 +116,11 @@ class EditService:
             self._baselined = baselined_uids(self.root)
         if item.attrs.get("status") in statuses:
             raise ReasonRequiredError(
-                f"{item.uid} is {item.attrs.get('status')}; every change needs a reason. Enter why you are changing it."
+                f"{item.uid} is {item.attrs.get('status')}; every change needs a reason. Give the reason (the Reason box in the editor, --reason on the command line)."
             )
         if item.uid in self._baselined:
             raise ReasonRequiredError(
-                f"{item.uid} is part of a baseline; every change needs a reason. Enter why you are changing it."
+                f"{item.uid} is part of a baseline; every change needs a reason. Give the reason (the Reason box in the editor, --reason on the command line)."
             )
 
     def _check_values(self, prefix: str, attrs: Mapping[str, Any], text: str | None = None) -> None:
@@ -140,6 +141,8 @@ class EditService:
                 )  # noqa: E501
             textcheck.check(name, value)
             adef = defs.get(name)
+            if adef is not None and value not in (None, "", []) and not type_ok(adef.type, value):
+                raise ValueError(f"'{name}' must be {TYPE_HINT.get(adef.type, adef.type)}; got {value!r}.")
             if adef is not None and adef.type == "enum" and adef.vocab and value not in (None, ""):
                 allowed = self._cfg.vocab.values(adef.vocab)
                 if value not in allowed:

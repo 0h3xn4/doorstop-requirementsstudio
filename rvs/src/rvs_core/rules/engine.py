@@ -119,7 +119,7 @@ def _has_parent(ctx: RuleContext, item: ItemData, rule: _Rule) -> Iterable[tuple
     if _applies_to_requirement(ctx, item) and item.document != ctx.root_prefix and not item.derived and not item.links:
         yield (
             f"{item.uid} has no parent requirement.",
-            "Link it to the requirement it derives from, or mark it as derived if it has no parent.",
+            "Link it to the requirement it derives from, or mark it as derived if it has no parent (set 'derived' to yes in an items CSV/XLSX import).",
         )
 
 
@@ -153,7 +153,7 @@ def _undefined_acronym(ctx: RuleContext, item: ItemData, rule: _Rule) -> Iterabl
                 seen.add(hit.text)
                 yield (
                     f"{item.uid} uses the acronym '{hit.text}', which is not in the glossary.",
-                    "Add it to config/glossary.yaml with its expansion.",
+                    "Add it under Project > Glossary and Acronyms… (or in config/glossary.yaml) with its expansion.",
                 )
 
 

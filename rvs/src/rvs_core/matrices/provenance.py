@@ -1,8 +1,9 @@
 """Provenance block carried by every output (spec rule 18)."""
 
 import getpass
+import os
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 
 import rvs_core
 from rvs_core.config import ProjectConfig
@@ -41,4 +42,16 @@ class Provenance:
             who = user or getpass.getuser()
         except Exception:  # noqa: BLE001 - no login name on locked-down hosts
             who = "unknown"
-        return cls(rvs_core.__version__, rvs_core.framework_version(), cfg.project.name, baseline, datetime.now(), who)
+        return cls(rvs_core.__version__, rvs_core.framework_version(), cfg.project.name, baseline, _now(), who)
+
+
+def _now() -> datetime:
+    """The generation time. ``SOURCE_DATE_EPOCH`` (the reproducible-builds convention, UTC seconds) pins it, so two
+    exports of the same project made with the same value are byte-identical."""
+    raw = os.environ.get("SOURCE_DATE_EPOCH", "").strip()
+    if raw.isdigit():
+        try:
+            return datetime.fromtimestamp(int(raw), UTC).replace(tzinfo=None)
+        except (OverflowError, OSError, ValueError):
+            pass
+    return datetime.now()  # noqa: DTZ005 - local wall-clock time, shown to the user as is

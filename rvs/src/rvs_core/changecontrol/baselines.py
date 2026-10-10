@@ -4,10 +4,12 @@ A baseline is (1) a manifest ``baselines/<name>.yaml`` with a content digest per
 whole project directory, and (2) the tag ``rvs/baseline/[<project path>/]<name>`` on that commit. The tag message
 records the manifest's SHA-256, so a later edit of the manifest file is detected."""
 
+import contextlib
 import hashlib
 import json
 import os
 import re
+import shutil
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -16,8 +18,8 @@ from typing import Any
 
 import yaml
 
-from rvs_core.adapter import DoorstopProject, ItemData
-from rvs_core.authoring import EditService
+from rvs_core.adapter import DoorstopProject, ItemData, cache
+from rvs_core.authoring import EditService, history_path
 from rvs_core.changecontrol.changes import ChangeRequest, ChangeRequestError, ChangeRequestStore
 from rvs_core.changecontrol.manifests import baselined_uids, manifest_names, manifest_path, read_manifest
 from rvs_core.config import ProjectConfig, load_project_config
@@ -100,7 +102,7 @@ def _ref_safe(path: str) -> str:
     for p in path.split("/"):
         if not p:
             continue
-        safe = re.sub(r"[^A-Za-z0-9._-]", "_", p).lstrip(".") or "_"
+        safe = re.sub(r"\.{2,}", "_", re.sub(r"[^A-Za-z0-9._-]", "_", p)).lstrip(".") or "_"
         if safe != p or safe.endswith(".lock"):
             safe = f"{safe}+{hashlib.sha1(p.encode('utf-8'), usedforsecurity=False).hexdigest()[:8]}"  # noqa: S324 - a label
         parts.append(safe)
@@ -113,11 +115,15 @@ def _tag_name(repo: GitRepo, root: Path, name: str) -> str:
 
 
 RESERVED_NAMES = {"working"}  # the diff commands use this word for the working copy
+#: Names Windows refuses as file names (with or without an extension): ``baselines/<name>.yaml`` must be checkable there.
+WINDOWS_RESERVED = {"con", "prn", "aux", "nul", *(f"com{i}" for i in range(1, 10)), *(f"lpt{i}" for i in range(1, 10))}
 
 
 def _check_name(name: str) -> None:
     if (name or "").lower() in RESERVED_NAMES:
         raise BaselineError(f"'{name}' cannot be a baseline name: it stands for the working copy in comparisons.")
+    if (name or "").split(".")[0].lower() in WINDOWS_RESERVED:
+        raise BaselineError(f"'{name}' cannot be a baseline name: Windows reserves it as a device name.")
     if ".." in (name or "") or (name or "").endswith((".", ".lock")):
         raise BaselineError(
             f"'{name}' is not a valid baseline name: Git does not allow '..' or a name ending in '.' or '.lock'."
@@ -151,6 +157,11 @@ def create_baseline(
         raise BaselineError(f"Git does not accept '{tag_name}' as a tag name; choose another baseline name.")
     if manifest_path(root, name).exists() or repo.tag(tag_name) is not None:
         raise BaselineError(f"The baseline '{name}' already exists; baselines are immutable. Choose another name.")
+    clash = [n for n in manifest_names(root) if n.lower() == name.lower()]
+    if clash:  # 'BL1' and 'bl1' would be the same file on Windows and macOS
+        raise BaselineError(
+            f"The baseline '{name}' differs only in upper/lower case from the existing '{clash[0]}'. Choose another name."
+        )
 
     store = ChangeRequestStore(root, cfg)
     open_requests = store.open_requests()
@@ -168,12 +179,25 @@ def create_baseline(
     who = user or EditService(root).user
     promotions = _promotions(root, cfg)
     # Everything below touches files before the commit and the tag exist. If any step fails, the files are put back
-    # (the status promotion, the deferred change requests, the manifest) so the name is not burned.
-    backup: dict[Path, bytes] = {root / rel: (root / rel).read_bytes() for _uid, rel in promotions}
+    # (the status promotion, the history entries, the deferred change requests, the manifest) and a commit that was
+    # already made is taken back, so the name is not burned.
+    backup: dict[Path, bytes | None] = {root / rel: (root / rel).read_bytes() for _uid, rel in promotions}
+    for uid, _rel in promotions:
+        hist = history_path(root, uid)
+        backup[hist] = hist.read_bytes() if hist.is_file() else None
     changes_dir = root / "changes"
     if changes_dir.is_dir():
         backup.update({f: f.read_bytes() for f in changes_dir.glob("*.yaml")})
     path = manifest_path(root, name)
+    (root / "baselines").mkdir(exist_ok=True)
+    try:  # reserve the name: of two processes creating the same baseline, only one gets past this line
+        path.open("x", encoding="utf-8").close()
+    except FileExistsError:
+        raise BaselineError(
+            f"The baseline '{name}' already exists; baselines are immutable. Choose another name."
+        ) from None
+    before = repo.head()
+    commit = ""
     try:
         try:
             for cr_id, reason in sorted(defer.items()):
@@ -183,6 +207,9 @@ def create_baseline(
         deferred_all = tuple(sorted(c.id for c in store.list() if c.status == cfg.changes.deferred_status))
 
         _promote(root, cfg, promotions)
+        svc = EditService(root, user=who)
+        for uid, _rel in promotions:
+            svc.record(uid, "baseline", ["status"], f"Baseline {name}")
         items = DoorstopProject.open(root).items()
         created = datetime.now().astimezone().isoformat(timespec="microseconds")
         manifest = {
@@ -195,22 +222,51 @@ def create_baseline(
             "items": {i.uid: item_digest(i) for i in sorted(items, key=lambda i: i.uid)},
         }
         text = yaml.safe_dump(manifest, sort_keys=True, allow_unicode=True)
-        (root / "baselines").mkdir(exist_ok=True)
         path.write_text(text, encoding="utf-8", newline="\n")
         digest = manifest_digest(text.encode("utf-8"))
 
         commit = repo.commit_directory(root, f"Baseline {name}: {description}\n\nRVS-Baseline: {name}", who)
+        _check_committed(repo, root, commit, name, items)
         message = f"{name}\n\n{description}\n\nitems: {len(items)}\nproject-path: {repo.relative(root)}\nmanifest-sha256: {digest}\n"
         repo.create_tag(tag_name, message, who, commit)
     except BaseException:
-        for file, data in backup.items():
-            file.write_bytes(data)
-        path.unlink(missing_ok=True)
+        _roll_back(backup, path, repo, root, commit, before)
         raise
-    svc = EditService(root, user=who)
-    for uid, _rel in promotions:
-        svc.record(uid, "baseline", ["status"], f"Baseline {name}")
     return Baseline(name, description, who, created, commit, tag_name, len(items), deferred_all, digest)
+
+
+def _check_committed(repo: GitRepo, root: Path, commit: str, name: str, items: list[ItemData]) -> None:
+    """The commit must hold the manifest and every item file, or the baseline could never be verified."""
+    present = repo.tree_paths(commit, root)
+    wanted = {f"baselines/{name}.yaml", *(i.path for i in items)}
+    missing = sorted(wanted - present)
+    if missing:
+        shown = ", ".join(missing[:3]) + (f" and {len(missing) - 3} more" if len(missing) > 3 else "")
+        raise BaselineError(
+            f"The baseline commit would leave out project files ({shown}). Nothing was created. "
+            "Check that Git does not ignore them (.gitignore, .git/info/exclude)."
+        )
+
+
+def _roll_back(
+    backup: dict[Path, bytes | None], manifest: Path, repo: GitRepo, root: Path, commit: str, before: str | None
+) -> None:
+    """Put every touched file back, one at a time: a file that cannot be restored (locked on Windows) must not stop
+    the others, and the error that caused the roll-back stays the one reported."""
+    for file, data in backup.items():
+        try:
+            if data is None:
+                file.unlink(missing_ok=True)
+            else:
+                file.write_bytes(data)
+        except OSError:
+            continue
+    with contextlib.suppress(OSError):
+        manifest.unlink(missing_ok=True)
+        (root / "baselines").rmdir()  # only removed when this attempt created it (empty)
+    if commit and commit != before:
+        with contextlib.suppress(GitError):
+            repo.undo_commit(root, commit, before)
 
 
 def current_label(root: Path) -> str:
@@ -237,10 +293,10 @@ def _promote(root: Path, cfg: ProjectConfig, promotions: list[tuple[str, str]]) 
         proj.update_item(uid, attrs={"status": cfg.changes.promote[status]})
 
 
-def _tag_for(root: Path, name: str) -> tuple[GitRepo, Any]:
+def _tag_for(root: Path, name: str, repo: GitRepo | None = None) -> tuple[GitRepo, Any]:
     """The baseline's tag. Tags are named after the project's folder inside the repository; if the folder was moved
     or renamed since, the tag of the same name whose recorded manifest digest matches this manifest is used."""
-    repo = GitRepo.discover(root)
+    repo = repo or GitRepo.discover(root)
     tag = repo.tag(_tag_name(repo, root, name))
     if tag is None and manifest_path(root, name).is_file():
         digest = manifest_digest(manifest_path(root, name).read_bytes())
@@ -256,11 +312,16 @@ def orphan_tags(root: Path) -> list[str]:
         repo = GitRepo.discover(root)
     except GitError:
         return []
-    own = _tag_name(repo, Path(root), "")
-    names = set(manifest_names(Path(root)))
-    return sorted(
-        t.name[len(own) :] for t in repo.tags(own) if "/" not in t.name[len(own) :] and t.name[len(own) :] not in names
-    )
+    try:
+        own = _tag_name(repo, Path(root), "")
+        names = set(manifest_names(Path(root)))
+        return sorted(
+            t.name[len(own) :]
+            for t in repo.tags(own)
+            if "/" not in t.name[len(own) :] and t.name[len(own) :] not in names
+        )
+    except Exception:  # noqa: BLE001 - damaged Git metadata must not make the project unopenable; Git is not needed to edit
+        return []
 
 
 def _instant(created: str) -> datetime:
@@ -282,7 +343,7 @@ def list_baselines(root: Path) -> list[Baseline]:
     found = []
     for name in manifest_names(root):
         m = read_manifest(root, name)
-        tag = repo.tag(_tag_name(repo, root, name)) if repo else None
+        tag = _tag_for(root, name, repo)[1] if repo else None
         digest = ""
         if tag:
             digest = tag_digest(tag.message)
@@ -307,12 +368,14 @@ def verify_baseline(root: Path, name: str, *, deep: bool = True) -> list[Finding
     longer match the tagged tree (``deep``)."""
     root = Path(root)
     if not manifest_path(root, name).is_file():
-        raise BaselineError(f"The baseline '{name}' does not exist. List the baselines to see the available names.")
+        raise BaselineError(
+            f"The baseline '{name}' does not exist. Run 'rvs baseline list PROJECT' (or open the Baselines tab) to see the available names."
+        )
     repo, tag = _tag_for(root, name)
     loc = f"baselines/{name}.yaml"
     if tag is None:
         return [Finding("RVS-BASELINE-NOTAG", Severity.ERROR, f"Baseline {name} has a manifest but no Git tag.",
-                        "Restore the tag from the repository history or remove the manifest.", loc)]  # fmt: skip
+                        "Restore the tag from the repository history (git fetch --tags, or the clone it was made in); baselines are never deleted.", loc)]  # fmt: skip
     actual = manifest_digest(manifest_path(root, name).read_bytes())
     if tag_digest(tag.message) != actual:
         return [
@@ -334,7 +397,7 @@ def verify_baseline(root: Path, name: str, *, deep: bool = True) -> list[Finding
         return [
             Finding("RVS-BASELINE-CORRUPT", Severity.ERROR,
                     f"The tagged tree of baseline {name} does not match its manifest (items: {', '.join(bad[:5])}).",
-                    "Investigate the repository history; do not use this baseline.", loc)
+                    "Do not use this baseline. Compare the tagged commit with the manifest (git diff on the tag) to see what changed, and restore it from a trusted clone.", loc)
         ]  # fmt: skip
     return []
 
@@ -343,7 +406,9 @@ def snapshot_dir(root: Path, name: str) -> Path:
     """The project as it was at baseline ``name``, extracted inside the project's cache folder (reused afterwards)."""
     root = Path(root)
     if not manifest_path(root, name).is_file():
-        raise BaselineError(f"The baseline '{name}' does not exist. List the baselines to see the available names.")
+        raise BaselineError(
+            f"The baseline '{name}' does not exist. Run 'rvs baseline list PROJECT' (or open the Baselines tab) to see the available names."
+        )
     repo, tag = _tag_for(root, name)
     if tag is None:
         raise BaselineError(f"The Git tag of baseline '{name}' is missing; the snapshot cannot be restored.")
@@ -352,8 +417,11 @@ def snapshot_dir(root: Path, name: str) -> Path:
         raise BaselineError("The snapshot cache folder is a symbolic link; remove it and try again.")
     target = snapshots / tag.commit[:16]
     marker = target / ".complete"
-    if marker.exists():
+    signature = cache.sign(tag.commit)
+    if marker.is_file() and cache.verify(tag.commit, marker.read_text(encoding="utf-8")):
         return Path(target)
+    if target.exists():
+        shutil.rmtree(target, ignore_errors=True)  # incomplete, unsigned or foreign: extract again from the repository
     (root / CACHE).mkdir(exist_ok=True)
     for guard, content in ((".gitignore", "*\n"), (".doorstop.skip-all", "")):
         if not (root / CACHE / guard).exists():
@@ -370,5 +438,5 @@ def snapshot_dir(root: Path, name: str) -> Path:
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_bytes(data)
         os.utime(dest, (when, when))  # old timestamps: the item cache may store these files straight away
-    marker.write_text("", encoding="utf-8")
+    marker.write_text(signature, encoding="utf-8")
     return Path(target)

@@ -23,13 +23,14 @@ class ImpactResult:
 
     def flat(self) -> list[ImpactNode]:
         out: list[ImpactNode] = []
-
-        def walk(node: ImpactNode) -> None:
-            for child in node.children:
-                out.append(child)
-                walk(child)
-
-        walk(self.root)
+        stack = [iter(self.root.children)]  # pre-order without recursion: a chain of 1,000 links must not overflow
+        while stack:
+            child = next(stack[-1], None)
+            if child is None:
+                stack.pop()
+                continue
+            out.append(child)
+            stack.append(iter(child.children))
         return out
 
     @property

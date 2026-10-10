@@ -17,6 +17,7 @@ import re
 import xml.etree.ElementTree as ET
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from xml.parsers import expat
 
 import markdown
 
@@ -31,7 +32,7 @@ NS = "http://www.omg.org/spec/ReqIF/20110401/reqif.xsd"
 XHTML = "http://www.w3.org/1999/xhtml"
 XML_LANG = "{http://www.w3.org/XML/1998/namespace}lang"
 Q = f"{{{NS}}}"
-_UID = re.compile(r"^([A-Z][A-Z0-9]*)-(\d+)$")
+_UID = re.compile(r"^([A-Z][A-Z0-9]*)-([0-9]+)\Z")
 _SPACES = re.compile(r"[\s\-]+")
 
 # attribute definitions every export carries (id suffix, ReqIF long name, datatype)
@@ -386,14 +387,27 @@ def _normal(name: str) -> str:
     return _SPACES.sub("_", name.strip().lower())
 
 
+def _refuse_declarations(data: bytes) -> None:
+    """Parse once with expat only to find DOCTYPE and entity declarations (any encoding, with or without a byte-order
+    mark: expat detects it exactly as the real parse will). Nothing is expanded in this pass."""
+    refused = ValueError("The ReqIF file contains DOCTYPE or entity declarations, which RVS does not read.")
+
+    def refuse(*_args: object) -> None:
+        raise refused
+
+    probe = expat.ParserCreate()
+    probe.StartDoctypeDeclHandler = refuse
+    probe.EntityDeclHandler = refuse
+    try:
+        probe.Parse(data, True)
+    except expat.ExpatError as exc:
+        raise ValueError(f"This is not a readable ReqIF (XML) file: {exc}.") from None
+
+
 def _parse(data: bytes) -> ET.Element:
     if not data.strip():
         raise ValueError("The ReqIF file is empty.")
-    variants = [data.lower()]
-    for encoding in ("utf-16", "utf-32"):  # the same declaration spelled in a wider encoding
-        variants.append(data.decode(encoding, errors="ignore").lower().encode("utf-8", errors="ignore"))
-    if any(b"<!doctype" in v or b"<!entity" in v for v in variants):
-        raise ValueError("The ReqIF file contains DOCTYPE or entity declarations, which RVS does not read.")
+    _refuse_declarations(data)
     try:
         root = ET.fromstring(data)  # noqa: S314 - DOCTYPE/ENTITY declarations were refused above
     except ET.ParseError as exc:

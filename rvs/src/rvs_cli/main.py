@@ -10,6 +10,7 @@ from pathlib import Path
 import rvs_core
 from rvs_cli import changecontrol
 from rvs_cli.output import emit
+from rvs_core import atomicio
 from rvs_core.adapter import ProjectError
 from rvs_core.authoring import ReasonRequiredError
 from rvs_core.changecontrol.baselines import BaselineError
@@ -53,7 +54,12 @@ def build_parser() -> argparse.ArgumentParser:
     what.add_argument(
         "--reqif", action="store_true", help="ReqIF exchange file with items, hierarchy and links; see --document"
     )
-    exp.add_argument("--format", choices=(*TABLE_FORMATS, "reqif"), default="csv")
+    exp.add_argument(
+        "--format",
+        choices=(*TABLE_FORMATS, "reqif"),
+        default=None,
+        help="default: taken from the -o file name (.xlsx, .docx, ...), else csv (html for --spec)",
+    )
     exp.add_argument("--output", "-o", type=Path, help="write to this file instead of standard output")
     exp.add_argument(
         "--document", action="append", default=[], help="VCM, --spec and --reqif: only this document (repeatable)"
@@ -111,7 +117,7 @@ def _validate(args: argparse.Namespace) -> int:
     else:
         for finding in report.findings:
             print(finding.format())
-        print(f"{errors} errors, {warnings} warnings, {report.count(Severity.INFO)} info")
+        print(f"{_n(errors, 'error')}, {_n(warnings, 'warning')}, {report.count(Severity.INFO)} info")
     return report.exit_code
 
 
@@ -142,7 +148,15 @@ def _request(args: argparse.Namespace) -> ExportRequest:
     )  # fmt: skip
 
 
+def _default_format(args: argparse.Namespace) -> str:
+    if args.output is not None and args.output.suffix.lower().lstrip(".") in (*TABLE_FORMATS, "reqif"):
+        return args.output.suffix.lower().lstrip(".")
+    return "reqif" if args.reqif else "html" if args.spec else "csv"
+
+
 def _export(args: argparse.Namespace) -> int:
+    if args.format is None:
+        args.format = _default_format(args)
     if args.format in BINARY_FORMATS and not args.output:
         print(f"rvs export: --format {args.format} writes a binary file; give --output FILE.", file=sys.stderr)
         return 2
@@ -283,6 +297,10 @@ def _selftest(args: argparse.Namespace) -> int:
     return 0
 
 
+def _n(count: int, noun: str) -> str:
+    return f"{count} {noun}{'' if count == 1 else 's'}"
+
+
 def _guide(args: argparse.Namespace) -> int:
     from rvs_core.guide import guide_path
 
@@ -291,7 +309,7 @@ def _guide(args: argparse.Namespace) -> int:
         print("rvs guide: the user guide is not part of this installation.", file=sys.stderr)
         return 2
     if args.output:
-        args.output.write_bytes(path.read_bytes())
+        atomicio.write_bytes(args.output, path.read_bytes())
         print(f"Guide written to {args.output}.")
     else:
         print(path)
@@ -311,6 +329,44 @@ def main(argv: Sequence[str] | None = None) -> int:
     except OSError as exc:
         print(f"rvs: {exc.strerror or exc}{f' ({exc.filename})' if exc.filename else ''}", file=sys.stderr)
         return 2
+    except KeyboardInterrupt:
+        print("rvs: interrupted.", file=sys.stderr)
+        return 130
+    except Exception as exc:  # noqa: BLE001 - the last line of defence: a message, never a traceback
+        return _unexpected(exc)
+
+
+def _unexpected(exc: Exception) -> int:
+    """Turn an exception no command handled into one plain message. Known kinds say what is wrong; anything else is a
+    bug, saved as a crash report (no project content) and reported as such. ``RVS_DEBUG=1`` shows the traceback."""
+    if os.environ.get("RVS_DEBUG"):
+        raise exc
+    import yaml
+
+    from rvs_core.changecontrol.changes import ChangeRequestError
+    from rvs_core.config import ConfigError
+    from rvs_core.schema.versioning import SchemaVersionError
+
+    if isinstance(exc, ProjectError):  # includes unreadable item files
+        print(f"rvs: {exc}", file=sys.stderr)
+        return 3
+    if isinstance(
+        exc, ConfigError | SchemaVersionError | BaselineError | ChangeRequestError | GitError | ReasonRequiredError
+    ):
+        print(f"rvs: {exc}", file=sys.stderr)
+        return 2
+    if isinstance(exc, yaml.YAMLError):
+        print("rvs: a project file is not valid YAML. Run 'rvs validate' to see which one.", file=sys.stderr)
+        return 3
+    from rvs_core.diagnostics import save_crash_report
+
+    saved = save_crash_report(type(exc), exc, exc.__traceback__)
+    where = f" A crash report without project content was saved to {saved}." if saved else ""
+    print(
+        f"rvs: unexpected error ({type(exc).__name__}).{where} Run with RVS_DEBUG=1 for the full traceback.",
+        file=sys.stderr,
+    )
+    return 1
 
 
 def _main(argv: Sequence[str] | None = None) -> int:

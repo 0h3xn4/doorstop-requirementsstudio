@@ -8,6 +8,10 @@ from rvs_core.findings import Finding, Severity
 from rvs_core.trace.graph import PARENT, LinkGraph
 
 
+def _noun(kind: str) -> str:
+    return {"requirements": "requirement"}.get(kind, kind) if kind else "unknown kind of item"
+
+
 def _kind(cfg: ProjectConfig, prefix: str) -> str:
     decl = cfg.project.document(prefix)
     return decl.kind if decl else ""
@@ -42,9 +46,9 @@ def validate_links(cfg: ProjectConfig, graph: LinkGraph, items: Sequence[ItemDat
             out.append(
                 Finding(
                     "RVS-LINK-KIND", Severity.ERROR,
-                    f"{e.source} ({sk or 'unknown'} item) has a '{e.type}' link to {e.target} ({tk or 'unknown'} item), "
-                    f"but '{e.type}' links must go from {' or '.join(definition.source_kinds)} items to "
-                    f"{' or '.join(definition.target_kinds)} items.",
+                    f"{e.source} ({_noun(sk)}) has a '{e.type}' link to {e.target} ({_noun(tk)}), "
+                    f"but '{e.type}' links must go from {' or '.join(map(_noun, definition.source_kinds))} items to "
+                    f"{' or '.join(map(_noun, definition.target_kinds))} items.",
                     f"Remove the link from {e.source} or point it at a suitable item.", src.path, e.source,
                 )
             )  # fmt: skip

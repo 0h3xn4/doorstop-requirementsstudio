@@ -6,6 +6,7 @@ from typing import Any
 import yaml
 
 BASELINES_DIR = "baselines"
+_FastSafeLoader = getattr(yaml, "CSafeLoader", yaml.SafeLoader)  # libyaml when available: manifests hold every item
 
 
 def manifest_path(root: Path, name: str) -> Path:
@@ -18,7 +19,11 @@ def manifest_names(root: Path) -> list[str]:
 
 
 def read_manifest(root: Path, name: str) -> dict[str, Any]:
-    data = yaml.safe_load(manifest_path(root, name).read_text(encoding="utf-8"))
+    """The manifest as a dict; an unreadable or damaged file reads as empty (``rvs validate`` reports it)."""
+    try:
+        data = yaml.load(manifest_path(root, name).read_text(encoding="utf-8"), Loader=_FastSafeLoader)  # noqa: S506
+    except (yaml.YAMLError, OSError, UnicodeDecodeError):
+        return {}
     return data if isinstance(data, dict) else {}
 
 

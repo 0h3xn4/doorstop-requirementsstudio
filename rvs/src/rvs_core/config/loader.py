@@ -67,7 +67,7 @@ def _load_one(name: str, path: Path, relative: str, findings: list[Finding], *, 
                 "RVS-CONFIG-DEFAULTED",
                 Severity.INFO,
                 f"{relative} not found; using the packaged default.",
-                "Copy the default into the project's config folder to customise it.",
+                "No action needed. To customise it, create the file in the project's config folder (a new project from 'rvs init' has a copy to start from).",
                 relative,
             )
         )
@@ -81,7 +81,7 @@ def _load_one(name: str, path: Path, relative: str, findings: list[Finding], *, 
                 "RVS-SCHEMA-OLDER",
                 Severity.INFO,
                 f"{relative} is schema version {found}; migrated in memory.",
-                "Save the project to write the current version.",
+                "No action needed: the file still works. Set the current version number in it to remove this notice.",
                 relative,
             )
         )

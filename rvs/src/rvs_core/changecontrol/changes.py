@@ -53,7 +53,14 @@ class ChangeRequestStore:
         return self.dir / f"{cr_id}.yaml"
 
     def _read(self, path: Path) -> ChangeRequest:
-        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+        try:
+            raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+        except (yaml.YAMLError, UnicodeDecodeError) as exc:
+            line = getattr(getattr(exc, "problem_mark", None), "line", None)
+            where = f" at line {line + 1}" if line is not None else ""
+            raise ChangeRequestError(
+                f"{CHANGES_DIR}/{path.name} is not valid YAML{where}. Fix or restore the file."
+            ) from None
         if not isinstance(raw, dict):
             raise ChangeRequestError(f"{CHANGES_DIR}/{path.name} must contain a mapping of settings.")
         data, _ = migrate("change_request", raw, path=f"{CHANGES_DIR}/{path.name}")
@@ -128,6 +135,12 @@ class ChangeRequestStore:
                 os.link(tmp, path)  # fails if the file exists: atomic "create only"
             except FileExistsError:
                 return False
+            except OSError:  # no hard links here (FAT, some network shares): exclusive create instead
+                try:
+                    with path.open("x", encoding="utf-8", newline="\n") as fh:
+                        fh.write(text)
+                except FileExistsError:
+                    return False
             return True
         finally:
             tmp.unlink(missing_ok=True)
@@ -139,13 +152,15 @@ class ChangeRequestStore:
             raise ChangeRequestError("A change request needs a title.")
         first = self.cfg.changes.statuses[0]
         self.dir.mkdir(exist_ok=True)
-        while True:
-            numbers = [int(c.id.split("-")[1]) for c in self.list() if c.id.split("-")[-1].isdigit()]
+        for _attempt in range(1000):
+            taken = [c.id for c in self.list()] + [p.stem for p in self.dir.glob("CR-*.yaml")]
+            numbers = [int(i.rsplit("-", 1)[1]) for i in taken if i.rsplit("-", 1)[-1].isdigit()]
             cr_id = f"CR-{max(numbers, default=0) + 1:0{self.cfg.changes.digits}d}"
             cr = ChangeRequest(cr_id, title.strip(), description, first, raised_by, tuple(items),
                                ({"when": _now(), "who": raised_by, "status": first, "note": "created"},))  # fmt: skip
             if self._atomic_write(self._path(cr_id), self._dump(cr), replace=False):
                 return cr  # otherwise someone else just took this number: pick the next one
+        raise ChangeRequestError("A change request number could not be reserved; check the changes/ folder.")
 
     def update(
         self,

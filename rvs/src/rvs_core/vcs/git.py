@@ -20,6 +20,12 @@ from dulwich.refs import check_ref_format
 from dulwich.repo import Repo
 
 SKIP_DIRS = {".git", ".rvs-cache"}
+#: Files of these kinds are the project's own data (items, config, manifests, history, change requests): ``.gitignore``
+#: rules never leave them out of a baseline commit, or the baseline could not be verified. Everything else (attachments,
+#: build output, secrets) follows the ignore rules.
+PROJECT_DATA_SUFFIXES = (".yml", ".yaml", ".jsonl")
+GITLINK_MODE = 0o160000
+SYMLINK_MODE = 0o120000
 
 
 class GitError(Exception):
@@ -96,16 +102,9 @@ class GitRepo:
             return None
 
     # committing ###################################################################
-    def commit_directory(self, directory: Path, message: str, user: str | None) -> str:
-        """Commit the files under ``directory`` (deletions included) and nothing else; returns the commit id, or the
-        current head when nothing changed.
-
-        Only the project's own subtree of the head tree is replaced: files other people staged elsewhere in the
-        repository stay staged and uncommitted. Ignored files, nested repositories and Git's own folders are not
-        added. The commit object is written directly, so no Git hook runs and no signing setup is consulted."""
-        directory = Path(directory).resolve()
+    def _project_files(self, directory: Path) -> tuple[list[str], list[str]]:
+        """(files to stage, tracked files of the project that no longer exist) as repository-relative paths."""
         rel = self.relative(directory)
-        parts = [p for p in rel.split("/") if p]
         prefix = f"{rel}/" if rel else ""
         index = self._repo.open_index()
         tracked = {p.decode() for p in index}
@@ -118,13 +117,65 @@ class GitRepo:
                 if d not in SKIP_DIRS and not os.path.lexists(os.path.join(dirpath, d, ".git"))  # nested repository
             )
             for f in sorted(filenames):
-                if f == ".git":
-                    continue  # a submodule's pointer file
+                if f == ".git" or f.endswith(".tmp"):
+                    continue  # a submodule's pointer file; a half-written file of a crashed save
                 path = f"{prefix}{Path(dirpath, f).relative_to(directory).as_posix()}"
-                if path not in tracked and ignore.is_ignored(path):
-                    continue  # ignored files (secrets, build output) are never force-added
+                if path not in tracked and not f.endswith(PROJECT_DATA_SUFFIXES) and ignore.is_ignored(path):
+                    continue  # ignored attachments (secrets, build output) are never force-added
                 files.append(path)
-        stale = [p for p in tracked if p.startswith(prefix) and p not in set(files)]
+        listed = set(files)
+        return files, [p for p in tracked if p.startswith(prefix) and p not in listed]
+
+    def tree_paths(self, commit: str, directory: Path) -> set[str]:
+        """Paths (relative to ``directory``) of the files in ``commit``, without reading their content."""
+        tree = self._tree(self._commit(commit).tree)
+        for part in [p for p in self.relative(directory).split("/") if p]:
+            try:
+                tree = self._tree(tree[part.encode()][1])
+            except KeyError:
+                return set()
+        out: set[str] = set()
+
+        def walk(t: Tree, prefix: str) -> None:
+            for entry in t.items():
+                name = entry.path.decode("utf-8", errors="replace")
+                if entry.mode == GITLINK_MODE:
+                    continue
+                if entry.mode == 0o040000:
+                    walk(self._tree(entry.sha), f"{prefix}{name}/")
+                else:
+                    out.add(f"{prefix}{name}")
+
+        walk(tree, "")
+        return out
+
+    def undo_commit(self, directory: Path, commit: str, before: str | None) -> None:
+        """Take back ``commit`` (made by :meth:`commit_directory`) when the step that needed it failed: HEAD returns to
+        ``before`` and the project's files are staged as they are now. A no-op if HEAD has moved on since."""
+        if self.head() != commit:
+            return
+        try:
+            if before:
+                self._refs[b"HEAD"] = before.encode()
+            else:  # the commit was the first one: unborn again
+                names, _sha = self._refs.follow(b"HEAD")
+                del self._refs[names[-1]]
+            files, stale = self._project_files(Path(directory).resolve())
+            self._repo.get_worktree().stage(files + stale)
+        except (OSError, KeyError) as exc:
+            raise GitError(f"Git could not take back the commit {commit[:12]}: {exc}") from exc
+
+    def commit_directory(self, directory: Path, message: str, user: str | None) -> str:
+        """Commit the files under ``directory`` (deletions included) and nothing else; returns the commit id, or the
+        current head when nothing changed.
+
+        Only the project's own subtree of the head tree is replaced: files other people staged elsewhere in the
+        repository stay staged and uncommitted. Ignored files, nested repositories and Git's own folders are not
+        added. The commit object is written directly, so no Git hook runs and no signing setup is consulted."""
+        directory = Path(directory).resolve()
+        rel = self.relative(directory)
+        parts = [p for p in rel.split("/") if p]
+        files, stale = self._project_files(directory)
         worktree = self._repo.get_worktree()
         worktree.stage(files + stale)
 
@@ -132,14 +183,16 @@ class GitRepo:
         head_obj = self._repo[before.encode()] if before else None
         head_tree = self._repo[head_obj.tree] if isinstance(head_obj, Commit) else None
         staged_root = self._repo[commit_index(self._repo.object_store, self._repo.open_index())]
-        assert isinstance(staged_root, Tree)
+        if not isinstance(staged_root, Tree):
+            raise GitError("Git could not read the staged files.")
         subtree: Tree = staged_root
         for part in parts:  # the project's own subtree of what is staged
             try:
                 node = self._repo[subtree[part.encode()][1]]
             except KeyError:
                 raise GitError(f"Nothing under {directory} could be committed.") from None
-            assert isinstance(node, Tree)
+            if not isinstance(node, Tree):
+                raise GitError(f"Nothing under {directory} could be committed.")
             subtree = node
         new_root = self._with_subtree(head_tree if isinstance(head_tree, Tree) else None, parts, subtree.id)
         if before and isinstance(head_obj, Commit) and new_root == head_obj.tree:
@@ -177,10 +230,17 @@ class GitRepo:
         self._repo.object_store.add_object(tree)
         return bytes(tree.id)
 
+    def _commit(self, commit: str) -> Commit:
+        try:
+            obj = self._repo[commit.encode()]
+        except KeyError:
+            raise GitError(f"The commit {commit[:12]} is not in this repository.") from None
+        if not isinstance(obj, Commit):
+            raise GitError(f"{commit[:12]} is not a commit.")
+        return obj
+
     def commit_author(self, commit: str) -> str:
-        obj = self._repo[commit.encode()]
-        assert isinstance(obj, Commit)
-        return str(obj.author.decode())
+        return str(self._commit(commit).author.decode())
 
     # tags ############################################################################
     @staticmethod
@@ -208,7 +268,10 @@ class GitRepo:
             raise GitError(f"Git could not create the tag '{name}': {exc}") from exc
 
     def _tag_info(self, name: str, sha: bytes) -> TagInfo | None:
-        obj = self._repo[sha]
+        try:
+            obj = self._repo[sha]
+        except KeyError:  # the tag points at an object this clone does not have (partial fetch, pruned)
+            return None
         if isinstance(obj, Tag):
             return TagInfo(name, obj.object[1].decode(), obj.tagger.decode(), int(obj.tag_time), obj.message.decode())
         if isinstance(obj, Commit):  # lightweight tag
@@ -232,17 +295,13 @@ class GitRepo:
         """Files of ``directory`` as they were in ``commit``: {path relative to the directory: bytes}. ``rel`` names
         the folder inside the repository when the project was moved since (default: where it is now)."""
         rel = self.relative(directory) if rel is None else rel
-        obj = self._repo[commit.encode()]
-        assert isinstance(obj, Commit)
-        tree = self._repo[obj.tree]
-        assert isinstance(tree, Tree)
+        tree = self._tree(self._commit(commit).tree)
         for part in [p for p in rel.split("/") if p]:
             try:
                 mode, sha = tree[part.encode()]
             except KeyError:
                 return {}
-            tree = self._repo[sha]
-            assert isinstance(tree, Tree)
+            tree = self._tree(sha)
         out: dict[str, bytes] = {}
 
         def walk(t: Tree, prefix: str) -> None:
@@ -250,6 +309,8 @@ class GitRepo:
                 name = entry.path.decode("utf-8", errors="replace")
                 if name in ("", ".", "..", ".git") or "/" in name or "\\" in name or "\x00" in name:
                     raise GitError(f"The tagged tree contains an entry named {name!r}, which cannot be a project file.")
+                if entry.mode in (GITLINK_MODE, SYMLINK_MODE):
+                    continue  # a submodule pointer has no content here; a link is not project data
                 child = self._repo[entry.sha]
                 path = f"{prefix}{name}"
                 if isinstance(child, Tree):
@@ -260,7 +321,14 @@ class GitRepo:
         walk(tree, "")
         return out
 
+    def _tree(self, sha: bytes) -> Tree:
+        try:
+            tree = self._repo[sha]
+        except KeyError:
+            raise GitError("The repository is missing a folder object (an incomplete clone?).") from None
+        if not isinstance(tree, Tree):
+            raise GitError("The repository holds a file where a folder was expected.")
+        return tree
+
     def commit_time(self, commit: str) -> int:
-        obj = self._repo[commit.encode()]
-        assert isinstance(obj, Commit)
-        return int(obj.commit_time)
+        return int(self._commit(commit).commit_time)

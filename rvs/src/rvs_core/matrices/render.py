@@ -33,7 +33,7 @@ def to_csv(table: MatrixTable) -> str:
     for line in (*table.provenance.lines(), *table.notes):
         buf.write(f"# {line}\n")
     writer = csv.writer(buf, lineterminator="\n")
-    writer.writerow(table.columns)
+    writer.writerow([csvsafe.protect(c) for c in table.columns])  # headers come from config: no formulas either
     writer.writerows([csvsafe.protect(c) for c in row] for row in table.rows)  # no formula injection in Excel
     return buf.getvalue()
 

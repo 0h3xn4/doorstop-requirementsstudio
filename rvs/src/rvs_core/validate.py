@@ -176,6 +176,18 @@ def _item_check(cfg: ProjectConfig):  # type: ignore[no-untyped-def]
                 )
             )
 
+        if item.duplicate_keys:
+            out.append(
+                Finding(
+                    "RVS-ITEM-DUPLICATE-KEY",
+                    Severity.ERROR,
+                    f"Item {uid} has the key(s) {', '.join(item.duplicate_keys)} more than once; only the last one is used.",
+                    "Remove the extra line(s) in the item file (a Git merge that went wrong is the usual cause).",
+                    loc,
+                    uid,
+                )
+            )
+
         version = item.attrs.get(VERSION_KEY)
         if version is None:
             out.append(

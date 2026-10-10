@@ -14,7 +14,7 @@ from PySide6.QtCore import (
     Qt,
     Signal,
 )
-from PySide6.QtGui import QAction, QActionGroup, QCloseEvent
+from PySide6.QtGui import QAction, QActionGroup, QCloseEvent, QGuiApplication
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -214,6 +214,7 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("")
         self.set_mode(userconfig.load()["mode"], remember=False)
         self.set_theme(userconfig.load()["theme"], remember=False, restyle=False)
+        QGuiApplication.styleHints().colorSchemeChanged.connect(self._on_system_scheme)
         self._restore_geometry()
 
     # menus ####################################################################
@@ -789,6 +790,11 @@ class MainWindow(QMainWindow):
         if remember:
             userconfig.update(theme=name)
 
+    def _on_system_scheme(self, _scheme: object = None) -> None:
+        """The desktop switched between light and dark: follow it, but only if the user chose "Follow the system"."""
+        if self.theme == "system":
+            self.set_theme("system", remember=False)
+
     def _restyle(self) -> None:
         """Repaint what bakes colours in at creation time."""
         self.notification.restyle()
@@ -796,6 +802,7 @@ class MainWindow(QMainWindow):
             view.restyle()
         self.editor.restyle()
         self.graph_view.refresh()
+        self.diff_view.restyle()
         if self.table_model.rowCount():
             self.table_model.dataChanged.emit(
                 self.table_model.index(0, 0),

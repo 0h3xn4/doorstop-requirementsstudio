@@ -143,7 +143,17 @@ def export_reqif(
     for vocab in sorted({a.vocab for a in attrs if a.type == "enum" and a.vocab}):  # type: ignore[type-var,unused-ignore]
         enum = ident("DATATYPE-DEFINITION-ENUMERATION", types, f"RVS-DT-Enum-{vocab}", vocab)
         specified = _e("SPECIFIED-VALUES", enum)
-        for n, value in enumerate(cfg.vocab.values(vocab)):
+        known = list(cfg.vocab.values(vocab))
+        stray = sorted(  # values in use that the vocabulary does not list: kept, so no information is lost
+            {
+                str(i.attrs[a.name])
+                for i in chosen
+                for a in attrs
+                if a.type == "enum" and a.vocab == vocab and i.attrs.get(a.name) not in (None, "")
+            }
+            - set(known)
+        )
+        for n, value in enumerate([*known, *stray]):
             enum_ids[(vocab, value)] = f"RVS-EV-{vocab}-{n}"
             ev = ident("ENUM-VALUE", specified, enum_ids[(vocab, value)], value)
             _e("EMBEDDED-VALUE", _e("PROPERTIES", ev), KEY=str(n), **{"OTHER-CONTENT": ""})

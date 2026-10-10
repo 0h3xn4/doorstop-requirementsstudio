@@ -71,6 +71,7 @@ class DiffView(QWidget):
         self.left, self.right, self.document = QComboBox(), QComboBox(), QComboBox()
         self.compare_button = QPushButton("Compare")
         self.export_button = QPushButton("Export…")
+        self._generation = 0
         self.summary = QLabel("Choose two versions and press Compare.")
         self.model = MatrixTableModel(self)
         self.table = QTableView()
@@ -147,20 +148,34 @@ class DiffView(QWidget):
             return
         left, right = self._ref(self.left.currentText()), self._ref(self.right.currentText())
         self.summary.setText("Comparing …")
+        self._generation += 1
+        generation = self._generation  # a result that arrives after a newer request was made is discarded
 
         def work() -> DiffResult:
             return diff_snapshots(load_snapshot(root, left), load_snapshot(root, right))
 
         def done(result: DiffResult) -> None:
+            if generation != self._generation:
+                return
             self.diff = result
             self._show_table()
             self.diff_ready.emit()
 
         def failed(exc: Exception) -> None:
+            if generation != self._generation:
+                return
             self.summary.setText("The comparison failed.")
             self.message.emit("error", f"The comparison failed: {exc}")
 
         run_in_background(work, done, failed)
+
+    def restyle(self) -> None:
+        """Re-render the shown comparison with the colours of the current theme (the word marking is baked into HTML)."""
+        if self.diff is not None:
+            row = self.table.currentIndex().row()
+            self._show_table()
+            if row > 0:
+                self.select_row(row)
 
     def _filtered(self) -> tuple[ItemChange, ...]:
         assert self.diff is not None

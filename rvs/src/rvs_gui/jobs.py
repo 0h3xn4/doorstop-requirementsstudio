@@ -42,6 +42,8 @@ class _Task(QRunnable):
             result = self._fn()
         except Exception as exc:  # noqa: BLE001 - reported to the GUI thread, never printed as a traceback
             self._signals.failed.emit(exc)
+        except BaseException as exc:  # noqa: BLE001 - e.g. SystemExit in a worker: still report, or the job never ends
+            self._signals.failed.emit(RuntimeError(f"The background task stopped unexpectedly ({type(exc).__name__})."))
         else:
             self._signals.done.emit(result)
 

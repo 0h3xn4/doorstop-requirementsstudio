@@ -647,6 +647,10 @@ rvs import my-project items.xlsx --reason &quot;Re-numbered after review&quot;
 <td>An item file cannot be parsed, usually because a hand edit broke the YAML. The message names the file and the line; fix it and open the project again.</td>
 </tr>
 <tr>
+<td><code>RVS-ITEM-DUPLICATE-KEY</code></td>
+<td>An item file has the same key twice; only the last value is used. Remove the extra line (a bad Git merge is the usual cause).</td>
+</tr>
+<tr>
 <td><code>RVS-ITEM-NAME</code></td>
 <td>An item file is not named like an ID of its document (for example <code>SYS-0001 copy.yml</code>, or an item of another document in this folder). Rename or remove it.</td>
 </tr>

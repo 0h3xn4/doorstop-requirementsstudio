@@ -128,6 +128,14 @@ def load_project_config(root: Path) -> tuple[ProjectConfig, list[Finding]]:
         )
         for k, v in loaded["templates"]["kinds"].items()
     }
+    template_names = {a.name for tpl in kinds.values() for a in tpl.attributes}
+    redefined = sorted(a.name for a in project.free_attributes if a.name in template_names)
+    if redefined:
+        raise ConfigError(
+            f"{PROJECT_FILE}: free attribute(s) {', '.join(redefined)} have the same name as a template attribute, which "
+            "would silently change its type. Rename the free attribute or remove it.",
+            location=PROJECT_FILE,
+        )
     for kind, tpl in kinds.items():
         names = {a.name for a in tpl.attributes}
         _check_reserved(sorted(names), "config/templates.yaml")

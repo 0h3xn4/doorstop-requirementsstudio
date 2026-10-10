@@ -6,8 +6,10 @@ Files modified within the last ``RACY_SECONDS`` are never cached: two writes ins
 timestamp tick could otherwise leave a stale entry that looks valid.
 """
 
+import contextlib
 import json
 import os
+import threading
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -15,7 +17,7 @@ from typing import Any
 from rvs_core.adapter.model import ItemData
 
 CACHE_DIR = ".rvs-cache"
-CACHE_VERSION = 1
+CACHE_VERSION = 2
 RACY_SECONDS = 2.0
 
 StatKey = tuple[int, int]
@@ -43,6 +45,7 @@ def _to_dict(item: ItemData) -> dict[str, Any]:
 def _from_dict(d: dict[str, Any]) -> ItemData:
     d = dict(d)
     d["links"] = tuple(d["links"])
+    d["duplicate_keys"] = tuple(d.get("duplicate_keys", ()))
     return ItemData(**d)
 
 
@@ -64,6 +67,7 @@ class ItemCache:
             return {}
 
     def save(self, prefix: str, config: StatKey, entries: dict[str, tuple[StatKey, ItemData]]) -> None:
+        tmp: Path | None = None
         try:
             self.dir.mkdir(exist_ok=True)
             ignore = self.dir / ".gitignore"
@@ -77,8 +81,11 @@ class ItemCache:
                 "config": list(config),
                 "items": {rel: {"k": list(k), "d": _to_dict(d)} for rel, (k, d) in sorted(entries.items())},
             }
-            tmp = self._file(prefix).with_suffix(".tmp")
+            tmp = self._file(prefix).with_suffix(f".{os.getpid()}.{threading.get_ident()}.tmp")  # one per writer
             tmp.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8", newline="\n")
             os.replace(tmp, self._file(prefix))
         except (OSError, TypeError, ValueError):
-            pass  # read-only checkout, full disk or a value JSON cannot hold: the cache is only an optimisation
+            # read-only checkout, full disk or a value JSON cannot hold: the cache is only an optimisation
+            if tmp is not None:
+                with contextlib.suppress(OSError):
+                    tmp.unlink(missing_ok=True)

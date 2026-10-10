@@ -2,6 +2,7 @@
 
 import logging
 import os
+import threading
 import time
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import replace
@@ -39,6 +40,43 @@ _settings.ADDREMOVE_FILES = False
 # loaders on every example item. Without libyaml (some platforms) Doorstop's default stays.
 if getattr(yaml, "CSafeLoader", None) is not None:
     _doorstop_common.load_yaml.__defaults__ = (yaml.CSafeLoader,)
+
+
+def _duplicate_keys(path: Path) -> tuple[str, ...]:
+    """Top-level keys that occur twice in an item file (YAML loaders keep the last one without a word)."""
+    try:
+        node = yaml.compose(
+            path.read_text(encoding="utf-8", errors="replace"), Loader=getattr(yaml, "CSafeLoader", yaml.SafeLoader)
+        )  # the C parser: the pure-Python composer tripled the cold open of 5,000 items
+    except (yaml.YAMLError, OSError):
+        return ()
+    if not isinstance(node, yaml.MappingNode):
+        return ()
+    seen: set[str] = set()
+    dups: list[str] = []
+    for key, _value in node.value:
+        if isinstance(key, yaml.ScalarNode):
+            if key.value in seen and key.value not in dups:
+                dups.append(key.value)
+            seen.add(key.value)
+    return tuple(dups)
+
+
+def _atomic_write_text(text: str, path: str, end: str = "\n") -> str:
+    """Doorstop writes item files in place, so a crash half way leaves a truncated file. Write a temporary file next to
+    it and swap it in instead."""
+    tmp = f"{path}.{os.getpid()}.{threading.get_ident()}.tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8", newline=end) as fh:  # noqa: PTH123, SIM115 - same call as Doorstop's
+            fh.write(text)
+        os.replace(tmp, path)
+    finally:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+    return path
+
+
+_doorstop_common.write_text = _atomic_write_text
 
 
 def _refuse_includes(root: Path) -> None:
@@ -252,6 +290,9 @@ class DoorstopProject:
                 if obj is None or not obj.active:
                     continue  # not an item file, or an inactive item (Document.items skips those too)
                 data = self._data(obj)
+                dups = _duplicate_keys(path)
+                if dups:
+                    data = replace(data, duplicate_keys=dups)
                 self.cache_stats.misses += 1
                 result[rel] = data
                 if not is_racy(key, now_ns):

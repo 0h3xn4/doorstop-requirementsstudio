@@ -32,12 +32,29 @@ SHORTCUTS: dict[str, tuple[str, str]] = {
 }
 
 
+def _readable(override: str) -> QKeySequence | None:
+    sequence = QKeySequence(override)
+    # Qt parses any text into *some* sequence ("not a key" becomes N, O, T ...); accept only text it reads back as is
+    if not sequence.isEmpty() and sequence.toString().replace(" ", "").lower() == override.replace(" ", "").lower():
+        return sequence
+    return None
+
+
 def key_for(action_id: str) -> QKeySequence:
-    override = userconfig.load()["shortcuts"].get(action_id)
-    if override:
-        sequence = QKeySequence(override)
-        # Qt parses any text into *some* sequence ("not a key" becomes N, O, T ...); accept only text it reads back as is
-        if not sequence.isEmpty() and sequence.toString().replace(" ", "").lower() == override.replace(" ", "").lower():
+    overrides = userconfig.load()["shortcuts"]
+    override = overrides.get(action_id)
+    sequence = _readable(override) if override else None
+    if sequence is not None:
+        # Two actions on one key would both stop working (Qt: "ambiguous shortcut"): an override that collides with
+        # another action's key, default or overridden, is ignored.
+        taken = {
+            (_readable(overrides[other]) or QKeySequence(default)).toString()
+            if other in overrides
+            else QKeySequence(default).toString()
+            for other, (default, _desc) in SHORTCUTS.items()
+            if other != action_id
+        }
+        if sequence.toString() not in taken:
             return sequence
     return QKeySequence(SHORTCUTS[action_id][0])  # no override, or one Qt cannot read: the default stays
 

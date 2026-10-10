@@ -44,14 +44,19 @@ class ItemData:
     link_stamps: Mapping[str, str] = field(default_factory=dict)  # parent uid -> stamp recorded when last reviewed
     attrs: Mapping[str, Any] = field(default_factory=dict)  # RVS extended attributes
     path: str = ""  # relative to the project folder
+    duplicate_keys: tuple[str, ...] = ()  # keys that appear twice in the item file (the last one silently wins)
 
     @property
     def level_key(self) -> tuple[int, ...]:
-        """Sort key for the dotted level ("1.10" after "1.9"); headings (x.0) sort first."""
+        """Sort key for the dotted level: numeric ("1.10" after "1.9"), and a heading ("6.0", "1.2.0") before the items
+        of its section, including a plain "6" (Doorstop treats "6" and "6.0" as the same position)."""
         try:
-            return tuple(int(p) for p in self.level.split("."))
+            parts = [int(p) for p in self.level.split(".")]
         except ValueError:
             return (10**9,)
+        if len(parts) > 1 and parts[-1] == 0:
+            return (*parts[:-1], -1)
+        return (*parts, 0)
 
 
 @dataclass(frozen=True)

@@ -73,7 +73,7 @@ def test_default_column_widths_give_the_id_little_and_the_title_the_rest(win: Ma
     qtbot.wait(50)
     header = win.table.horizontalHeader()
     assert 70 <= header.sectionSize(0) <= 110
-    assert header.sectionSize(2) >= 100  # the title takes what is left
+    assert header.sectionSize(2) >= 90  # the title takes what is left (font metrics differ a little per platform)
 
 
 def test_the_documents_dock_is_wide_enough_for_titles(win: MainWindow, qtbot):  # type: ignore[no-untyped-def]

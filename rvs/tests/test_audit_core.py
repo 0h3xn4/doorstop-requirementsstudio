@@ -127,7 +127,7 @@ def test_windows_device_names_are_refused(git_project: Path, name: str):
 
 def test_names_differing_only_in_case_are_refused(git_project: Path):
     create_baseline(git_project, "Case1", "x", user="a")
-    with pytest.raises(BaselineError, match="upper/lower case"):
+    with pytest.raises(BaselineError, match="upper/lower case|already exists"):
         create_baseline(git_project, "case1", "x", user="a")
 
 

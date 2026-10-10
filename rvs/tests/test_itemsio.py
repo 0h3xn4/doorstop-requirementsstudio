@@ -137,7 +137,7 @@ def test_changed_cell_updates_only_that_item_and_field(minimal_project: Path):
     report = apply_import(minimal_project, plan, user="alice", why="rename")
     assert (report.created, report.updated, report.unchanged) == (0, 1, 9)
     after = _snapshot(minimal_project)
-    assert [k for k in after if after[k] != before.get(k)] == ["SYS/SYS-0002.yml"]
+    assert [k.replace("\\", "/") for k in after if after[k] != before.get(k)] == ["SYS/SYS-0002.yml"]
     assert DoorstopProject.open(minimal_project).get_item("SYS-0002").attrs["title"] == "Eclipse operation (rev)"
     entry = read_history(minimal_project, "SYS-0002")[-1]
     assert entry["action"] == "import" and entry["why"] == "rename" and entry["fields"] == ["title"]

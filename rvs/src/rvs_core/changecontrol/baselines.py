@@ -238,7 +238,7 @@ def create_baseline(
 def _check_committed(repo: GitRepo, root: Path, commit: str, name: str, items: list[ItemData]) -> None:
     """The commit must hold the manifest and every item file, or the baseline could never be verified."""
     present = repo.tree_paths(commit, root)
-    wanted = {f"baselines/{name}.yaml", *(i.path for i in items)}
+    wanted = {f"baselines/{name}.yaml", *(i.path.replace("\\", "/") for i in items)}
     missing = sorted(wanted - present)
     if missing:
         shown = ", ".join(missing[:3]) + (f" and {len(missing) - 3} more" if len(missing) > 3 else "")

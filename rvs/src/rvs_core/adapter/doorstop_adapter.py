@@ -238,7 +238,7 @@ class DoorstopProject:
         return DocumentInfo(
             prefix=str(doc.prefix),
             parent=str(doc.parent) if doc.parent else None,
-            path=str(Path(doc.path).relative_to(self.root)),
+            path=Path(doc.path).relative_to(self.root).as_posix(),
             sep=str(doc.sep),
             digits=int(doc.digits),
             itemformat=str(doc.itemformat),
@@ -308,7 +308,7 @@ class DoorstopProject:
             stamp=str(item.stamp()),
             link_stamps={str(u): str(u.stamp) for u in sorted(item.links, key=str)},
             attrs=attrs,
-            path=str(Path(item.path).relative_to(self.root)),
+            path=Path(item.path).relative_to(self.root).as_posix(),
         )
 
     def items(self, prefix: str | None = None) -> list[ItemData]:
@@ -348,7 +348,7 @@ class DoorstopProject:
             hit = cached.get(rel)
             if hit is not None and hit[0] == key:
                 # the cached path may be from before the document folder was moved: recompute it
-                data = replace(hit[1], path=str((doc_dir / rel).relative_to(self.root)))
+                data = replace(hit[1], path=(doc_dir / rel).relative_to(self.root).as_posix())
                 result[rel] = data
                 entries[rel] = (hit[0], data)
                 self.cache_stats.hits += 1

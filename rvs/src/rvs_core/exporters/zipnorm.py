@@ -15,6 +15,9 @@ def normalize_zip(data: bytes, patches: dict[str, Callable[[bytes], bytes]] | No
             fresh = zipfile.ZipInfo(info.filename, date_time=_EPOCH)
             fresh.compress_type = zipfile.ZIP_STORED
             fresh.external_attr = 0o600 << 16
+            fresh.create_system = (
+                3  # the default is 0 on Windows and 3 elsewhere: pin it so the bytes are the same everywhere
+            )
             blob = src.read(info.filename)
             if patches and info.filename in patches:
                 blob = patches[info.filename](blob)

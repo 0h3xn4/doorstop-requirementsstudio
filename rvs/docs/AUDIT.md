@@ -140,9 +140,12 @@ last background job ends. This is a hypothesis, not a confirmed root cause.
 
 ## 4. Not verified
 
-- **Windows.** The previous CI run failed 7 tests on Windows (project files written with CRLF, now fixed; other causes
-  cannot be ruled out because the failing test names could not be retrieved). The Windows installer and build scripts
-  have never been run.
+- **Windows.** The first CI run on Windows (before this pass) failed 7 tests; the run after the audit fixes failed 78,
+  and the log showed why: (1) item paths came back with backslashes, so the new "baseline commit holds every item"
+  check refused every baseline (56 tests) and several path assertions failed; (2) DOCX/XLSX bytes differed from the
+  goldens because ZIP members record a "created on" byte that is 0 on Windows and 3 elsewhere; (3) Doorstop wrote CRLF.
+  All three are fixed (item paths are POSIX, `create_system` is pinned, LF is pinned) and covered by Linux tests; the
+  Windows run itself has to be re-checked in CI. The Windows installer and build scripts have never been run.
 - Real screen readers, native file dialogs, a real 1366 × 768 desktop, macOS.
 - Python 3.14 (not supported by the pins).
 - The root-level Linux/macOS/Windows workflows of the bundled Doorstop clone hardcode the upstream repository path and

@@ -546,3 +546,18 @@ def test_project_files_are_written_with_unix_line_endings_on_every_system():
     import rvs_core.adapter  # noqa: F401 - applies the settings
 
     assert settings.WRITE_LINESEPERATOR == "\n"
+
+
+def test_paths_are_posix_and_zip_members_do_not_depend_on_the_platform(minimal_project: Path):
+    """On Windows item paths came back with backslashes and ZIP members carried a different 'created on' byte, which broke
+    baselines (tree paths use '/') and made DOCX/XLSX outputs differ between systems."""
+    import zipfile
+
+    from rvs_core.exporters.zipnorm import normalize_zip
+
+    assert all("\\" not in i.path for i in DoorstopProject.open(minimal_project).items())
+    raw = io.BytesIO()
+    with zipfile.ZipFile(raw, "w") as z:
+        z.writestr("a.txt", "x")
+    with zipfile.ZipFile(io.BytesIO(normalize_zip(raw.getvalue()))) as z:
+        assert {i.create_system for i in z.infolist()} == {3}

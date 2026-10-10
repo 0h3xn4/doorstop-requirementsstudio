@@ -17,6 +17,7 @@ from rvs_core.matrices import Provenance, impact_table
 from rvs_core.trace import ImpactNode, impact
 from rvs_gui.matrix_views import MatrixTableModel
 from rvs_gui.session import ProjectSession
+from rvs_gui.widgets import keyboard_view, named
 
 
 class ImpactPanel(QDockWidget):
@@ -29,11 +30,11 @@ class ImpactPanel(QDockWidget):
         self.uid: str | None = None
         self.summary = QLabel("Select an item to see what a change to it would affect.")
         self.summary.setWordWrap(True)
-        self.tree = QTreeWidget()
+        self.tree = named(keyboard_view(QTreeWidget()), "Impact tree")
         self.tree.setColumnCount(3)
         self.tree.setHeaderLabels(["Item", "Via", "Title"])
         self.list_model = MatrixTableModel(self)
-        self.list_view = QTableView()
+        self.list_view = named(keyboard_view(QTableView()), "Impact list")
         self.list_view.setModel(self.list_model)
         self.list_view.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.list_view.verticalHeader().hide()
@@ -41,11 +42,15 @@ class ImpactPanel(QDockWidget):
         tabs.addTab(self.tree, "Tree")
         tabs.addTab(self.list_view, "List")
         body = QWidget()
+        body.setMinimumSize(140, 80)  # the dock can be squeezed
         lay = QVBoxLayout(body)
         lay.addWidget(self.summary)
         lay.addWidget(tabs, 1)
         self.setWidget(body)
+        # activated = Enter, Return or double-click
+        self.tree.itemActivated.connect(lambda item, _c: self.item_requested.emit(item.text(0)))
         self.tree.itemDoubleClicked.connect(lambda item, _c: self.item_requested.emit(item.text(0)))
+        self.list_view.activated.connect(lambda idx: self.item_requested.emit(str(idx.siblingAtColumn(0).data())))
         self.list_view.doubleClicked.connect(lambda idx: self.item_requested.emit(str(idx.siblingAtColumn(0).data())))
         session.loaded.connect(self._reload)
 
@@ -60,20 +65,24 @@ class ImpactPanel(QDockWidget):
         if graph is None or cfg is None or uid not in graph.uids:
             self.list_model.set_matrix(None)
             return
-        result = impact(graph, uid)
+        try:
+            result = impact(graph, uid)
+        except RecursionError:  # pragma: no cover - the core is iterative; stay safe for any other deep structure
+            self.list_model.set_matrix(None)
+            self.summary.setText(f"The impact of {uid} is too deeply nested to show.")
+            return
         titles = {i.uid: str(i.attrs.get("title") or i.header or "") for i in self.session.items}
 
-        def add(parent: QTreeWidgetItem | QTreeWidget, node: ImpactNode) -> None:
+        # iterative: a chain of 1,000 links must not exhaust the recursion limit
+        work: list[tuple[QTreeWidgetItem | None, ImpactNode]] = [(None, c) for c in reversed(result.root.children)]
+        while work:
+            parent, node = work.pop()
             row = QTreeWidgetItem([node.uid, node.via, titles.get(node.uid, "")])
-            if isinstance(parent, QTreeWidget):
-                parent.addTopLevelItem(row)
+            if parent is None:
+                self.tree.addTopLevelItem(row)
             else:
                 parent.addChild(row)
-            for child in node.children:
-                add(row, child)
-
-        for child in result.root.children:
-            add(self.tree, child)
+            work.extend((row, c) for c in reversed(node.children))
         self.tree.expandAll()
         self.list_model.set_matrix(
             impact_table(self.session.items, result, Provenance.now(cfg, user=self.session.user))

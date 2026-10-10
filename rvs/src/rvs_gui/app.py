@@ -14,7 +14,7 @@ from PySide6.QtCore import (
     Qt,
     Signal,
 )
-from PySide6.QtGui import QAction, QActionGroup, QCloseEvent, QGuiApplication
+from PySide6.QtGui import QAction, QActionGroup, QCloseEvent, QGuiApplication, QKeyEvent, QKeySequence
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -23,13 +23,17 @@ from PySide6.QtWidgets import (
     QDockWidget,
     QFileDialog,
     QHBoxLayout,
+    QHeaderView,
     QInputDialog,
     QLabel,
     QLineEdit,
     QMainWindow,
     QMenu,
     QMessageBox,
+    QPushButton,
+    QScrollArea,
     QSplitter,
+    QStackedWidget,
     QStyledItemDelegate,
     QTableView,
     QTabWidget,
@@ -38,7 +42,7 @@ from PySide6.QtWidgets import (
 )
 
 import rvs_core
-from rvs_core import userconfig
+from rvs_core import atomicio, userconfig
 from rvs_core.adapter import ItemData, ProjectError
 from rvs_core.authoring import ReasonRequiredError
 from rvs_core.exporters.export_request import ExportRequest, build_output
@@ -68,7 +72,7 @@ from rvs_gui.project_dialogs import NewProjectDialog
 from rvs_gui.session import ProjectSession
 from rvs_gui.shortcuts import SHORTCUTS, ShortcutsDialog, key_for
 from rvs_gui.theme import load_fonts, stylesheet
-from rvs_gui.widgets import InlineNotification
+from rvs_gui.widgets import InlineNotification, keyboard_view, named, problem_counts, secondary
 from rvs_gui.wizard import NewRequirementWizard, RequirementSpec
 
 TITLE = "Requirements & Verification Studio"
@@ -76,6 +80,19 @@ NEW_STATEMENT = "The system shall <describe the required behaviour>."
 MODES = ("guided", "expert")
 ROW_HEIGHT = {"guided": 30, "expert": 22}
 ENUM_KEYS = ("type", "status", "priority", "verify_method", "verify_level")
+# Default widths (pixels) of the item table's columns; the title takes whatever is left.
+COLUMN_WIDTHS = {
+    "uid": 80, "document": 80, "type": 80, "status": 80, "priority": 70, "owner": 70, "verify_method": 70,
+    "verify_level": 70, "parents": 140, "problems": 60, "text": 300,
+}  # fmt: skip
+NOT_A_PROJECT = (
+    "That folder is not an RVS project. Choose the folder that contains rvs-project.yaml, or use File > New Project."
+)
+#: Actions that need an open project (disabled, and greyed in the menu, until one is open).
+PROJECT_ACTIONS = (
+    "import_items", "export", "new_requirement", "new_verification", "find", "go_to", "next_problem",
+    "prev_problem", "focus_problems", "focus_editor", "refresh", "full_validation", "new_baseline", "glossary",
+)  # fmt: skip
 
 
 class EnumDelegate(QStyledItemDelegate):
@@ -104,10 +121,10 @@ class EnumDelegate(QStyledItemDelegate):
 class FilterBar(QWidget):
     def __init__(self) -> None:
         super().__init__()
-        self.search = QLineEdit()
+        self.search = named(QLineEdit(), "Search items", "Type to filter the item table. Esc clears the search.")
         self.search.setPlaceholderText("Search ID, title or statement")
         self.search.setClearButtonEnabled(True)
-        self.status = QComboBox()
+        self.status = named(QComboBox(), "Filter by status")
         self.status.setMinimumContentsLength(14)
         self.only_problems = QCheckBox("Only items with problems")
         lay = QHBoxLayout(self)
@@ -133,6 +150,7 @@ class FilterBar(QWidget):
 class MainWindow(QMainWindow):
     export_done = Signal(str, str)  # (path, error message or '')
     project_opened = Signal(bool)  # an asynchronous open finished (True = the project is now open)
+    validation_finished = Signal(bool)  # a full validation ended (True = its findings are shown)
 
     def __init__(self, user: str | None = None) -> None:
         super().__init__()
@@ -143,7 +161,7 @@ class MainWindow(QMainWindow):
         self.table_model = ItemTableModel(self)
         self.table_proxy = ItemFilterProxy(self)
         self.table_proxy.setSourceModel(self.table_model)
-        self.table = QTableView()
+        self.table = named(keyboard_view(QTableView()), "Items")
         self.table.setModel(self.table_proxy)
         self.table.setSortingEnabled(True)
         self.table.sortByColumn(-1, Qt.SortOrder.AscendingOrder)  # keep document/level order until a header is clicked
@@ -152,12 +170,13 @@ class MainWindow(QMainWindow):
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.verticalHeader().hide()
-        self.table.horizontalHeader().setStretchLastSection(True)
+        self._set_default_column_widths()
         self.table.horizontalHeader().setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.filter_bar = FilterBar()
         self.editor = RequirementEditor(self.session)
         self.doc_tree = DocumentTree()
         self.problems_panel = ProblemsPanel()
+        self.editor.confirm_discard = self.confirm_revert
         self.impact_panel = ImpactPanel(self.session)
         self.trace_view = TraceabilityView(self.session)
         self.vcm_view = VcmView(self.session)
@@ -167,8 +186,13 @@ class MainWindow(QMainWindow):
         self.baselines_view = BaselinesView(self.session)
         self.diff_view = DiffView(self.session)
         self.graph_view.on_node_clicked = self.select_item
+        self.no_match = QLabel("No items match the search or filters. Clear the search, or choose All statuses.")
+        self.no_match.setObjectName("Empty")
+        self.no_match.setWordWrap(True)
+        self.no_match.hide()
         self._syncing = False
         self._opening = False
+        self._validating = False
         self._help: HelpViewer | None = None
         self.mode = "guided"
         self.theme = "light"
@@ -178,14 +202,20 @@ class MainWindow(QMainWindow):
         left_lay = QVBoxLayout(left)
         left_lay.setContentsMargins(0, 0, 0, 0)
         left_lay.addWidget(self.filter_bar)
+        left_lay.addWidget(self.no_match)
         left_lay.addWidget(self.table)
         split = QSplitter()
         split.addWidget(left)
         split.addWidget(self.editor)
         split.setStretchFactor(0, 3)
         split.setStretchFactor(1, 2)
+        split.setSizes([620, 380])
+        self.welcome = self._build_welcome()
+        self.items_stack = QStackedWidget()  # first launch shows the welcome pane, a project shows the item table
+        self.items_stack.addWidget(self.welcome)
+        self.items_stack.addWidget(split)
         self.tabs = QTabWidget()
-        self.tabs.addTab(split, "Items")
+        self.tabs.addTab(self.items_stack, "Items")
         self.tabs.addTab(self.trace_view, "Traceability")
         self.tabs.addTab(self.vcm_view, "VCM")
         self.tabs.addTab(self.coverage_view, "Coverage")
@@ -197,19 +227,29 @@ class MainWindow(QMainWindow):
         lay = QVBoxLayout(central)
         lay.addWidget(self.notification)
         lay.addWidget(self.tabs, 1)
-        self.setCentralWidget(central)
+        # The window may be made small (a laptop, a tiled window): the content scrolls instead of dictating the size.
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        scroll.setWidget(central)
+        self.setCentralWidget(scroll)
 
         tree_dock = QDockWidget("Documents", self)
         tree_dock.setObjectName("DocumentsDock")
         tree_dock.setWidget(self.doc_tree)
+        self.doc_tree.setMinimumSize(80, 60)
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, tree_dock)
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.problems_panel)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.impact_panel)
         self.mode_label = QLabel()
         self.statusBar().addPermanentWidget(self.mode_label)
-        self.resizeDocks([self.problems_panel], [120], Qt.Orientation.Vertical)  # the editor needs the height more
+        self.resizeDocks([self.problems_panel], [200], Qt.Orientation.Vertical)
+        self.resizeDocks([tree_dock, self.impact_panel], [220, 200], Qt.Orientation.Horizontal)
         self._build_menus(tree_dock)
         self._connect()
+        self._chain_focus()
+        self._update_action_states()
+        self._update_empty_state()
         self._setup_inline_editing()
         self.statusBar().showMessage("")
         self.set_mode(userconfig.load()["mode"], remember=False)
@@ -234,7 +274,7 @@ class MainWindow(QMainWindow):
 
     def _build_menus(self, tree_dock: QDockWidget) -> None:
         bar = self.menuBar()
-        file_menu = bar.addMenu("File")
+        file_menu = bar.addMenu("&File")
         self.action_open = self._action("open_project", "Open Project…", self.choose_project, file_menu)
         self.action_new_project = self._action("new_project", "New Project…", self.new_project_dialog, file_menu)
         self.recent_menu = file_menu.addMenu("Open Recent")
@@ -249,7 +289,7 @@ class MainWindow(QMainWindow):
         file_menu.addSeparator()
         self._action("quit", "Quit", self.close, file_menu)
 
-        item_menu = bar.addMenu("Item")
+        item_menu = bar.addMenu("&Item")
         self.action_new = self._action("new_requirement", "New Requirement…", self.new_requirement_dialog, item_menu)
         self.action_new_ver = self._action(
             "new_verification", "New Verification Item…", self.new_verification_dialog, item_menu
@@ -262,8 +302,9 @@ class MainWindow(QMainWindow):
         self._action("next_problem", "Next Problem", self.next_problem, item_menu)
         self._action("prev_problem", "Previous Problem", self.previous_problem, item_menu)
         self._action("focus_problems", "Problems Panel", self.focus_problems, item_menu)
+        self._action("focus_editor", "Focus Editor", self.focus_editor, item_menu)
 
-        project_menu = bar.addMenu("Project")
+        project_menu = bar.addMenu("&Project")
         self.action_refresh = self._action("refresh", "Refresh", self.session.refresh, project_menu)
         self.action_full = self._action(
             "full_validation", "Run Full Doorstop Validation", self.run_full_validation, project_menu
@@ -274,7 +315,7 @@ class MainWindow(QMainWindow):
         )
         self.action_glossary = self._action("glossary", "Glossary and Acronyms…", self.glossary_dialog, project_menu)
 
-        view_menu = bar.addMenu("View")
+        view_menu = bar.addMenu("&View")
         mode_menu = view_menu.addMenu("Mode")
         group = QActionGroup(self)
         group.setExclusive(True)
@@ -297,6 +338,12 @@ class MainWindow(QMainWindow):
         view_menu.addAction(tree_dock.toggleViewAction())
         view_menu.addAction(self.problems_panel.toggleViewAction())
         view_menu.addAction(self.impact_panel.toggleViewAction())
+        self.action_problem_codes = QAction("Show problem codes", self, checkable=True)
+        self.action_problem_codes.setToolTip(
+            "Show the Code column in the Problems panel (the codes are explained in the guide)"
+        )
+        self.action_problem_codes.toggled.connect(self.problems_panel.set_codes_visible)
+        view_menu.addAction(self.action_problem_codes)
         self.columns_menu = view_menu.addMenu("Columns")
         self.column_actions: dict[str, QAction] = {}
         for col in COLUMNS:
@@ -311,7 +358,7 @@ class MainWindow(QMainWindow):
         for n in range(self.tabs.count() + 1, 9):  # shortcuts for tabs that do not exist are still bound, harmlessly
             self._action(f"tab_{n}", f"Tab {n}", lambda: None)
 
-        help_menu = bar.addMenu("Help")
+        help_menu = bar.addMenu("&Help")
         self._action("help", "User Guide", lambda: self.show_help(), help_menu)
         self._action("shortcuts_help", "Keyboard Shortcuts", self.show_shortcuts, help_menu)
         about = QAction("About", self)
@@ -336,6 +383,7 @@ class MainWindow(QMainWindow):
         self.editor.item_loaded.connect(self._on_editor_loaded)
         self.impact_panel.item_requested.connect(self.select_item)
         self.editor.dirty_changed.connect(lambda _d: self.statusBar().showMessage(self._status_text()))
+        self.editor.dirty_changed.connect(lambda _d: self._update_action_states())
         self.doc_tree.document_selected.connect(self.table_proxy.set_document)
         self.doc_tree.item_selected.connect(self.select_item)
         self.table.selectionModel().currentRowChanged.connect(self._on_table_row)
@@ -345,7 +393,16 @@ class MainWindow(QMainWindow):
             lambda i: self.table_proxy.set_status("" if i <= 0 else self.filter_bar.status.currentText())
         )
         self.filter_bar.only_problems.toggled.connect(self.table_proxy.set_only_problems)
-        self.problems_panel.jump_requested.connect(self.select_item)
+        self.problems_panel.jump_requested.connect(self.jump_to)
+        for navigable in (self.trace_view, self.vcm_view, self.coverage_view, self.changes_view, self.diff_view):
+            navigable.item_requested.connect(self.jump_to)
+        self.table.activated.connect(self._on_table_activated)
+        self.table_proxy.rowsInserted.connect(self._update_empty_state)
+        self.table_proxy.rowsRemoved.connect(self._update_empty_state)
+        self.table_proxy.modelReset.connect(self._update_empty_state)
+        self.table_proxy.layoutChanged.connect(self._update_empty_state)
+        self.table_model.modelReset.connect(self._update_empty_state)
+        self.session.busy_changed.connect(lambda _b: self._update_action_states())
         self.problems_panel.location_requested.connect(
             lambda loc, msg: self.notification.show_message("info", f"{msg} (see {loc})" if loc else msg)
         )
@@ -354,6 +411,67 @@ class MainWindow(QMainWindow):
         return (
             f"{TITLE}\nrvs {rvs_core.__version__}\ndoorstop {rvs_core.framework_version()}\nOffline: no network access."
         )
+
+    # first launch, empty states, enabled actions ################################
+    def _build_welcome(self) -> QWidget:
+        pane = QWidget()
+        lay = QVBoxLayout(pane)
+        lay.addStretch(1)
+        title = QLabel("Welcome")
+        title.setStyleSheet("font-size: 24px; font-weight: 600;")
+        text = QLabel("Open a project, create one, or open an example.")
+        text.setWordWrap(True)
+        lay.addWidget(title, 0, Qt.AlignmentFlag.AlignHCenter)
+        lay.addWidget(text, 0, Qt.AlignmentFlag.AlignHCenter)
+        row = QHBoxLayout()
+        row.addStretch(1)
+        self.welcome_open = QPushButton("Open project…")
+        self.welcome_new = QPushButton("New project…")
+        self.welcome_example = QPushButton("Open example")
+        self.welcome_open.clicked.connect(self.choose_project)
+        self.welcome_new.clicked.connect(self.new_project_dialog)
+        self.welcome_example.clicked.connect(lambda: self.open_example_dialog("minimal"))
+        for button in (self.welcome_open, self.welcome_new, self.welcome_example):
+            row.addWidget(button)
+        for button in (self.welcome_new, self.welcome_example):
+            secondary(button)
+        row.addStretch(1)
+        lay.addLayout(row)
+        lay.addStretch(2)
+        return pane
+
+    def _set_default_column_widths(self) -> None:
+        header = self.table.horizontalHeader()
+        header.setStretchLastSection(False)
+        keys = [c.key for c in COLUMNS]
+        for key in keys:
+            col = keys.index(key)
+            if key == "title":
+                header.setSectionResizeMode(col, QHeaderView.ResizeMode.Stretch)
+            else:
+                header.setSectionResizeMode(col, QHeaderView.ResizeMode.Interactive)
+                header.resizeSection(col, COLUMN_WIDTHS.get(key, 100))
+
+    def _update_empty_state(self, *_a: object) -> None:
+        empty = self.table_model.rowCount() > 0 and self.table_proxy.rowCount() == 0
+        self.no_match.setVisible(empty)
+        self.table.setVisible(not empty)
+
+    def _update_action_states(self) -> None:
+        """Menu items follow the state: nothing to do without a project, Save and Revert only with unsaved edits."""
+        have = self.session.cfg is not None
+        busy = self.session.busy
+        for key in PROJECT_ACTIONS:
+            act = self.actions_by_id.get(key)
+            if act is not None:
+                act.setEnabled(have)
+        dirty = self.editor.is_dirty()
+        self.action_save.setEnabled(have and dirty and not busy)
+        self.action_revert.setEnabled(have and dirty)
+        self.action_new.setEnabled(have and not busy)
+        self.action_new_ver.setEnabled(have and not busy)
+        self.action_baseline.setEnabled(have and not busy)
+        self.action_import.setEnabled(have and not busy)
 
     # columns ##################################################################
     def set_column_visible(self, key: str, visible: bool) -> None:
@@ -379,7 +497,7 @@ class MainWindow(QMainWindow):
     def choose_project(self) -> None:
         path = QFileDialog.getExistingDirectory(self, "Open project folder")
         if path:
-            self.open_project(Path(path))
+            self.open_project_async(Path(path))
 
     def open_project(self, path: Path) -> bool:
         if self._opening:
@@ -406,6 +524,7 @@ class MainWindow(QMainWindow):
 
         def done(report: object) -> None:
             self._opening = False
+            QApplication.restoreOverrideCursor()
             if self.editor.is_dirty():  # the user started editing while the project was loading
                 self.notification.show_message(
                     "warning",
@@ -417,18 +536,21 @@ class MainWindow(QMainWindow):
 
         def failed(exc: Exception) -> None:
             self._opening = False
-            self.notification.show_message("error", f"The project could not be opened: {exc}")
+            QApplication.restoreOverrideCursor()
+            self.notification.show_message("error", f"The project could not be opened. {self._still_open_note()}{exc}")
             self.project_opened.emit(False)
 
+        QApplication.setOverrideCursor(Qt.CursorShape.BusyCursor)
         run_in_background(lambda: ProjectSession.open_report(path), done, failed)
 
     def _finish_open(self, path: Path, report: ValidationReport) -> bool:
         self.session.adopt(path, report)
-        if report.exit_code == 3 or self.session.cfg is None:
-            lines = " ".join(f"{f.message} {f.hint}".strip() for f in report.findings if f.severity.value == "error")
-            self.notification.show_message("error", f"The project could not be opened. {lines}")
+        if report.exit_code == 3 or self.session.cfg is None or report.config is None:
+            self.notification.show_message("error", self._open_failure_text(path, report))
             return False
         self.notification.dismiss()
+        self.items_stack.setCurrentIndex(1)
+        self._update_action_states()
         self.setWindowTitle(f"{self.session.cfg.project.name} — {TITLE} {rvs_core.__version__}")
         errors = sum(1 for f in report.findings if f.severity.value == "error")
         if errors:
@@ -439,12 +561,29 @@ class MainWindow(QMainWindow):
         self._refresh_recent()
         return True
 
+    def _still_open_note(self) -> str:
+        cfg = self.session.cfg
+        return f"The previous project ({cfg.project.name}) is still open. " if cfg is not None else ""
+
+    def _open_failure_text(self, path: Path, report: ValidationReport) -> str:
+        """A plain sentence for the common ways opening fails; technical detail stays short."""
+        errors = [f for f in report.findings if f.severity.value == "error"]
+        if any(f.code == "RVS-PROJECT-MISSING" for f in errors):
+            if not Path(path).is_dir():
+                head = f"{path} does not exist or is not a folder. Check the path."
+            else:
+                head = NOT_A_PROJECT
+        else:
+            detail = " ".join(f"{f.message} {f.hint}".strip() for f in errors[:2])
+            head = f"The project could not be opened. {detail}".strip()
+        return f"{head} {self._still_open_note()}".strip()
+
     def _refresh_recent(self) -> None:
         self.recent_menu.clear()
         recent = [p for p in userconfig.recent_projects() if p.is_dir()]  # a moved or deleted project is not offered
         for path in recent:
             act = QAction(str(path), self)
-            act.triggered.connect(lambda _c=False, p=path: self.open_project(p))
+            act.triggered.connect(lambda _c=False, p=path: self.open_project_async(p))
             self.recent_menu.addAction(act)
         self.recent_menu.setEnabled(bool(recent))
 
@@ -473,7 +612,11 @@ class MainWindow(QMainWindow):
         except (ValueError, OSError) as exc:
             self.notification.show_message("error", str(exc))
             return False
-        return self.open_project(Path(folder))
+        if not self.open_project(Path(folder)):
+            return False
+        hint = key_for("new_requirement").toString(QKeySequence.SequenceFormat.PortableText)
+        self.notification.show_message("success", f"Project created. Press {hint} to add your first requirement.")
+        return True
 
     def open_example_dialog(self, key: str) -> None:
         chosen = QFileDialog.getExistingDirectory(self, "Where should the example project be created?")
@@ -509,7 +652,7 @@ class MainWindow(QMainWindow):
         w = sum(1 for f in s.findings if f.severity.value == "warning")
         dirty = " · unsaved changes" if self.editor.is_dirty() else ""
         cr = f" · editing under {s.active_cr}" if s.active_cr else ""
-        return f"{len(s.items)} items · {e} errors · {w} warnings{cr}{dirty}"
+        return f"{len(s.items)} items · {problem_counts(e, w).replace(', ', ' · ')}{cr}{dirty}"
 
     # model refresh ############################################################
     def _on_loaded(self) -> None:
@@ -523,6 +666,8 @@ class MainWindow(QMainWindow):
         self.doc_tree.populate(s)
         self.problems_panel.set_findings(s.findings)
         self.statusBar().showMessage(self._status_text())
+        self.items_stack.setCurrentIndex(1)
+        self._update_action_states()
         uid = self.editor.current_uid
         if uid and s.item(uid) is not None:
             if not self.editor.is_dirty():
@@ -535,8 +680,17 @@ class MainWindow(QMainWindow):
             self.graph_view.refresh()
 
     def _on_editor_loaded(self, uid: str) -> None:
-        self.impact_panel.set_item(uid)
-        self.graph_view.show_item(uid)
+        # one failing panel must not leave the others empty
+        updates: list[tuple[str, Callable[[], object]]] = [
+            ("impact", lambda: self.impact_panel.set_item(uid)),
+            ("graph", lambda: self.graph_view.show_item(uid)),
+        ]
+        for name, update in updates:
+            try:
+                update()
+            except Exception as exc:  # noqa: BLE001 - reported, never a traceback; the editor itself is unaffected
+                self.notification.show_message("warning", f"The {name} view could not be updated for {uid}: {exc}")
+        self._chain_focus()
 
     # export / import ###########################################################
     def export_dialog(self) -> None:
@@ -565,7 +719,7 @@ class MainWindow(QMainWindow):
 
         def work() -> str:
             data = build_output(request, cfg, items, graph, Provenance.now(cfg, user=user, baseline=label))
-            path.write_bytes(data)
+            atomicio.write_bytes(path, data)
             return str(path)
 
         def done(written: str) -> None:
@@ -691,10 +845,34 @@ class MainWindow(QMainWindow):
         if self.session.cfg is None:
             self.notification.show_message("info", "Open a project first.")
             return
-        self.session.run_full_validation()
-        self.notification.show_message(
-            "info", "Full Doorstop validation finished; its findings are in the Problems panel until the next edit."
-        )
+        root = self.session.root
+        assert root is not None
+        if self._validating:
+            self.notification.show_message("info", "A validation is already running. Please wait.")
+            return
+        self._validating = True
+        QApplication.setOverrideCursor(Qt.CursorShape.BusyCursor)
+        self.notification.show_message("info", "Validating… the window stays usable; the result appears here.")
+
+        def done(report: object) -> None:
+            self._validating = False
+            QApplication.restoreOverrideCursor()
+            if self.session.root != root:  # another project was opened meanwhile: this result is not about it
+                self.validation_finished.emit(False)
+                return
+            self.session.adopt_validation(report)  # type: ignore[arg-type]
+            self.notification.show_message(
+                "info", "Full Doorstop validation finished; its findings are in the Problems panel until the next edit."
+            )
+            self.validation_finished.emit(True)
+
+        def failed(exc: Exception) -> None:
+            self._validating = False
+            QApplication.restoreOverrideCursor()
+            self.notification.show_message("error", f"The validation could not be completed: {exc}")
+            self.validation_finished.emit(False)
+
+        run_in_background(lambda: ProjectSession.full_validation_report(root), done, failed)
 
     def _on_item_changed(self, uid: str) -> None:
         self.statusBar().showMessage(self._status_text())
@@ -730,6 +908,39 @@ class MainWindow(QMainWindow):
             uid = self.table_proxy.mapToSource(idx).siblingAtColumn(0).data()
             if uid and uid != self.editor.current_uid:
                 self.select_item(uid)
+
+    def _chain_focus(self) -> None:
+        """Tab order of the Items tab: search, status, problems checkbox, the table, then the editor."""
+        bar = self.filter_bar
+        QWidget.setTabOrder(bar.search, bar.status)
+        QWidget.setTabOrder(bar.status, bar.only_problems)
+        QWidget.setTabOrder(bar.only_problems, self.table)
+        chain = self.editor.focus_chain()
+        if chain:
+            QWidget.setTabOrder(self.table, chain[0])
+
+    def focus_editor(self) -> bool:
+        """Move the keyboard focus into the editor (Items tab); False if no item is open."""
+        if self.session.cfg is None:
+            self.notification.show_message("info", "Open a project first.")
+            return False
+        self.tabs.setCurrentIndex(0)
+        if not self.editor.focus_editor():
+            self.notification.show_message("info", "Select an item first, then press this key to edit it.")
+            return False
+        return True
+
+    def jump_to(self, uid: str) -> bool:
+        """Open ``uid`` and put the keyboard focus in the editor (from the Problems panel, matrices, Go to, F8)."""
+        self.tabs.setCurrentIndex(0)
+        if not self.select_item(uid):
+            return False
+        self.editor.focus_editor()
+        return True
+
+    def _on_table_activated(self, _index: QModelIndex) -> None:
+        if self.table.state() != QAbstractItemView.State.EditingState:
+            self.editor.focus_editor()
 
     def select_item(self, uid: str) -> bool:
         if self.session.item(uid) is None:
@@ -889,8 +1100,7 @@ class MainWindow(QMainWindow):
         if self.session.item(uid) is None:
             self.notification.show_message("warning", f"There is no item {uid or text!r} in this project.")
             return False
-        self.tabs.setCurrentIndex(0)
-        return self.select_item(uid)
+        return self.jump_to(uid)
 
     def problem_uids(self) -> list[str]:
         return [
@@ -913,8 +1123,7 @@ class MainWindow(QMainWindow):
             after = [u for u in uids if order[u] > here]
             before = [u for u in uids if order[u] < here]
             target = (after[0] if after else uids[0]) if step > 0 else (before[-1] if before else uids[-1])
-        self.tabs.setCurrentIndex(0)
-        return target if self.select_item(target) else None
+        return target if self.jump_to(target) else None
 
     def next_problem(self) -> str | None:
         return self._step_problem(1)
@@ -974,13 +1183,47 @@ class MainWindow(QMainWindow):
         }.get(QMessageBox.StandardButton(answer), "cancel")
 
     def confirm_overwrite(self, path: Path) -> bool:
-        answer = QMessageBox.question(
-            self,
+        box = QMessageBox(
+            QMessageBox.Icon.Question,
             TITLE,
             f"{path.name} already exists. Replace it?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.NoButton,
+            self,
         )
-        return answer == QMessageBox.StandardButton.Yes
+        replace = box.addButton("Replace", QMessageBox.ButtonRole.DestructiveRole)
+        keep = box.addButton("Keep the existing file", QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(keep)
+        box.exec()
+        return box.clickedButton() is replace
+
+    def confirm_revert(self, uid: str) -> bool:
+        """True when unsaved edits to ``uid`` may be thrown away by Revert (overridden in tests)."""
+        box = QMessageBox(
+            QMessageBox.Icon.Question,
+            TITLE,
+            f"Discard your unsaved changes to {uid}? They cannot be recovered.",
+            QMessageBox.StandardButton.NoButton,
+            self,
+        )
+        discard = box.addButton("Discard changes", QMessageBox.ButtonRole.DestructiveRole)
+        keep = box.addButton("Keep editing", QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(keep)
+        box.exec()
+        return box.clickedButton() is discard
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:  # noqa: N802 - Qt API
+        """Esc clears the search field when it has the focus, otherwise dismisses the notification."""
+        if event.key() == Qt.Key.Key_Escape:
+            search = self.filter_bar.search
+            if search.hasFocus() and search.text():
+                search.clear()
+                event.accept()
+                return
+            if self.notification.isVisible():
+                self.notification.dismiss()
+                event.accept()
+                return
+        super().keyPressEvent(event)
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 - Qt API
         if self.editor.is_dirty():

@@ -10,9 +10,11 @@ from PySide6.QtCore import QStringListModel, Qt
 from PySide6.QtWidgets import QComboBox, QCompleter, QLabel, QLineEdit, QPlainTextEdit, QWidget
 
 from rvs_core.config.model import AttributeDef
+from rvs_core.exporters.itemsio import join_string_list, split_string_list
 from rvs_gui.completion import UidLineEdit
 from rvs_gui.session import ProjectSession
 from rvs_gui.theme import TOKENS
+from rvs_gui.widgets import keyboard_text
 
 LIST_TYPES = {"uid-list", "string-list"}
 # Plain string attributes that complete from values already used in the project.
@@ -31,8 +33,38 @@ def normalise(value: Any, kind: str) -> Any:
     return "" if value is None else str(value).strip()
 
 
+#: What the user reads for attributes whose stored name is a code. The template's own label wins when it has one.
+KNOWN_LABELS = {
+    "v_status": "Verification status",
+    "link_verifies": "Verifies",
+    "link_satisfies": "Satisfies",
+    "link_refines": "Refines",
+    "link_conflicts": "Conflicts with",
+    "link_conflicts_with": "Conflicts with",
+    "nonconformances": "Non-conformances",
+    "proc_id": "Procedure ID",
+    "verify_method": "Verification method",
+    "verify_level": "Verification level",
+    "executed_on": "Executed on",
+    "standard_clause": "Standard clause",
+}
+_ACRONYM_WORDS = {"id": "ID", "uid": "UID"}
+
+
+def plain_label(adef: AttributeDef) -> str:
+    """The attribute's name as a person reads it, without the required marker."""
+    own = getattr(adef, "label", "")
+    if own:
+        return str(own)
+    if adef.name in KNOWN_LABELS:
+        return KNOWN_LABELS[adef.name]
+    words = [_ACRONYM_WORDS.get(w, w) for w in adef.name.split("_")]
+    text = " ".join(words)
+    return text[:1].upper() + text[1:]
+
+
 def label_text(adef: AttributeDef) -> str:
-    return adef.name.replace("_", " ").capitalize() + (" *" if adef.required else "")
+    return plain_label(adef) + (" *" if adef.required else "")
 
 
 def help_text(adef: AttributeDef) -> str:
@@ -59,6 +91,7 @@ def make_widget(session: ProjectSession, adef: AttributeDef, on_change: Callable
         widget = combo
     elif adef.type == "text":
         box = QPlainTextEdit()
+        keyboard_text(box)
         box.setMaximumHeight(70)
         box.textChanged.connect(on_change)
         widget = box
@@ -79,6 +112,7 @@ def make_widget(session: ProjectSession, adef: AttributeDef, on_change: Callable
             line.setCompleter(completer)
         line.textChanged.connect(on_change)
         widget = line
+    widget.setAccessibleName(plain_label(adef))
     tip = help_text(adef)
     widget.setToolTip((tip + "\n\nRequired." if adef.required else tip) if tip else "")
     widget.setMinimumHeight(56 if isinstance(widget, QPlainTextEdit) else 28)
@@ -101,11 +135,16 @@ def get_value(widget: QWidget, kind: str) -> Any:
         return widget.currentText()
     raw = widget.toPlainText() if isinstance(widget, QPlainTextEdit) else widget.text()  # type: ignore[attr-defined]
     raw = raw.strip()
+    if kind == "string-list":
+        return split_string_list(raw)  # an entry may contain a comma (written \,): lossless
     return parse_list(raw) if kind in LIST_TYPES else raw
 
 
-def set_value(widget: QWidget, value: Any) -> None:
-    text = ", ".join(value) if isinstance(value, list) else ("" if value is None else str(value))
+def set_value(widget: QWidget, value: Any, kind: str = "") -> None:
+    if isinstance(value, list):
+        text = join_string_list(value) if kind == "string-list" else ", ".join(str(v) for v in value)
+    else:
+        text = "" if value is None else str(value)
     if isinstance(widget, QComboBox):
         widget.setCurrentIndex(max(0, widget.findText(text)))
     elif isinstance(widget, QPlainTextEdit):

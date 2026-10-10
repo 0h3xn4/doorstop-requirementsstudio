@@ -42,3 +42,9 @@ def _no_modal_prompts(monkeypatch: pytest.MonkeyPatch) -> None:
         return
     monkeypatch.setattr(MainWindow, "ask_unsaved", lambda self: "discard")
     monkeypatch.setattr(MainWindow, "confirm_overwrite", lambda self, path: True)
+    monkeypatch.setattr(MainWindow, "confirm_revert", lambda self, uid: True)
+    try:
+        from rvs_gui.wizard import NewRequirementWizard
+    except ImportError:
+        return
+    monkeypatch.setattr(NewRequirementWizard, "confirm_cancel", lambda self: True)

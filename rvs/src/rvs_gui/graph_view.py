@@ -22,6 +22,7 @@ from rvs_core.trace import neighbourhood
 from rvs_gui.graph_layout import layout
 from rvs_gui.session import ProjectSession
 from rvs_gui.theme import TOKENS
+from rvs_gui.widgets import named
 
 NODE_W, NODE_H = 170.0, 54.0
 _EDGE_TOKEN = {
@@ -59,16 +60,19 @@ class GraphView(QWidget):
         self.session = session
         self.uid: str | None = None
         self.on_node_clicked: Callable[[str], object] = lambda uid: None  # replaced by the main window
-        self.depth_box = QSpinBox()
+        self.setMinimumSize(480, 200)
+        self.depth_box = named(QSpinBox(), "Graph depth")
         self.depth_box.setRange(1, 4)
         self.depth_box.setValue(1)
         self.depth_box.valueChanged.connect(lambda _v: self.refresh())
         self.hint = QLabel("Select an item. Upstream items are above it, downstream items (children, verifiers) below.")
         self.scene_ = QGraphicsScene(self)
-        self.view = QGraphicsView(self.scene_)
+        self.view = named(QGraphicsView(self.scene_), "Item graph")
         self.view.setRenderHint(QPainter.RenderHint.Antialiasing)
         top = QHBoxLayout()
-        top.addWidget(QLabel("Depth"))
+        depth_label = QLabel("Depth")
+        depth_label.setBuddy(self.depth_box)
+        top.addWidget(depth_label)
         top.addWidget(self.depth_box)
         top.addWidget(self.hint, 1)
         lay = QVBoxLayout(self)

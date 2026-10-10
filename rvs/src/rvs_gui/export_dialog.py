@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QFormLayout,
     QHBoxLayout,
+    QLabel,
     QLineEdit,
     QPushButton,
     QVBoxLayout,
@@ -17,7 +18,17 @@ from PySide6.QtWidgets import (
 
 from rvs_core.exporters.export_request import ExportRequest, available_formats
 from rvs_gui.session import ProjectSession
+from rvs_gui.widgets import named, secondary
 
+HELP = {
+    "vcm": "The verification control matrix lists every requirement with how, where and whether it is verified.",
+    "trace": "The traceability matrix shows which items of one document are covered by items of another.",
+    "coverage": "A summary of how many requirements of each document are traced and verified.",
+    "impact": "Everything that a change to the item selected in the editor would affect.",
+    "items": "All items as a table. You can edit it and import it again with File > Import Items.",
+    "spec": "The requirements as a readable specification document.",
+    "reqif": "A ReqIF file for exchanging requirements with other requirements tools.",
+}
 KINDS = {
     "vcm": "Verification control matrix",
     "trace": "Traceability matrix",
@@ -34,22 +45,26 @@ class ExportDialog(QDialog):
         super().__init__(parent)
         assert session.cfg is not None
         self.setWindowTitle("Export")
+        self.setMinimumSize(520, 340)
         self.current_uid = current_uid
         prefixes = [d.prefix for d in session.cfg.project.documents]
-        self.kind = QComboBox()
+        self.kind = named(QComboBox(), "Content to export")
         for key, label in KINDS.items():
             self.kind.addItem(label, key)
-        self.format = QComboBox()
-        self.document = QComboBox()
+        self.format = named(QComboBox(), "File format")
+        self.document = named(QComboBox(), "Document")
         self.document.addItems(["All documents", *prefixes])
-        self.trace_source, self.trace_target = QComboBox(), QComboBox()
+        self.trace_source = named(QComboBox(), "From document")
+        self.trace_target = named(QComboBox(), "To document")
         self.trace_source.addItems(prefixes)
         self.trace_target.addItems(prefixes)
         self.trace_target.setCurrentIndex(1 if len(prefixes) > 1 else 0)
-        self.trace_direction = QComboBox()
+        self.trace_direction = named(QComboBox(), "Direction")
         self.trace_direction.addItems(["down", "up"])
-        self.path = QLineEdit()
+        self.path = named(QLineEdit(), "Export file path")
+        self.path.setPlaceholderText("Where to save the file")
         browse = QPushButton("Browse…")
+        secondary(browse)
         browse.clicked.connect(self._browse)
         path_row = QHBoxLayout()
         path_row.addWidget(self.path, 1)
@@ -62,13 +77,25 @@ class ExportDialog(QDialog):
         self.form.addRow("To", self.trace_target)
         self.form.addRow("Direction", self.trace_direction)
         self.form.addRow("Save as", path_row)
+        self.help = QLabel()
+        self.help.setWordWrap(True)
+        self.help.setObjectName("Empty")
+        self.problem = QLabel()
+        self.problem.setWordWrap(True)
+        self.problem.setAccessibleName("Problem")
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        self.ok_button = buttons.button(QDialogButtonBox.StandardButton.Ok)
+        self.ok_button.setText("Export")
+        secondary(buttons.button(QDialogButtonBox.StandardButton.Cancel))
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         lay = QVBoxLayout(self)
+        lay.addWidget(self.help)
         lay.addLayout(self.form)
+        lay.addWidget(self.problem)
         lay.addWidget(buttons)
         self.kind.currentIndexChanged.connect(self._on_kind)
+        self.path.textChanged.connect(self._update)
         self._on_kind()
 
     def set_kind(self, key: str) -> None:
@@ -79,6 +106,7 @@ class ExportDialog(QDialog):
 
     def _on_kind(self, *_a: object) -> None:
         key = self._key()
+        self.help.setText(HELP.get(key, ""))
         current = self.format.currentText()
         self.format.clear()
         self.format.addItems(available_formats(key))
@@ -95,6 +123,30 @@ class ExportDialog(QDialog):
             label = self.form.labelForField(widget)
             if label is not None:
                 label.setVisible(visible)
+        self._update()
+
+    def validate(self) -> str:
+        text = self.path.text().strip()
+        if not text:
+            return "Choose where to save the file (Browse… or type a path)."
+        folder = Path(text).parent
+        if not folder.is_dir():
+            return f"The folder {folder} does not exist. Choose an existing folder."
+        if Path(text).is_dir():
+            return "That is a folder. Type a file name as well."
+        return ""
+
+    def _update(self, *_a: object) -> None:
+        text = self.validate()
+        self.problem.setText(text)
+        self.ok_button.setEnabled(not text)
+
+    def accept(self) -> None:
+        self._update()
+        if self.validate():
+            self.path.setFocus()
+            return
+        super().accept()
 
     def request(self) -> ExportRequest:
         key = self._key()

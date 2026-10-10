@@ -1,6 +1,6 @@
 """Change requests tab."""
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QModelIndex, Qt, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -20,8 +20,9 @@ from PySide6.QtWidgets import (
 from rvs_core.changecontrol.changes import ChangeRequestError
 from rvs_core.matrices import Provenance
 from rvs_core.matrices.table import MatrixTable
-from rvs_gui.matrix_views import MatrixTableModel
+from rvs_gui.matrix_views import MatrixTableModel, item_in_row
 from rvs_gui.session import ProjectSession
+from rvs_gui.widgets import keyboard_text, keyboard_view, named, secondary
 
 
 def _ids(text: str) -> list[str]:
@@ -30,13 +31,15 @@ def _ids(text: str) -> list[str]:
 
 class ChangesView(QWidget):
     message = Signal(str, str)
+    item_requested = Signal(str)  # Enter or double-click on an affected or edited item
 
     def __init__(self, session: ProjectSession) -> None:
         super().__init__()
         self.session = session
+        self.setMinimumSize(480, 200)
         self.current_id: str | None = None
         self.model = MatrixTableModel(self)
-        self.table = QTableView()
+        self.table = named(keyboard_view(QTableView()), "Change requests")
         self.table.setModel(self.model)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
@@ -45,17 +48,20 @@ class ChangesView(QWidget):
         self.heading = QLabel("Select a change request, or fill in the form and press New.")
         self._refreshing = False
         self._snapshot: tuple[str, str, str, str] = ("", "", "", "")
-        self.title = QLineEdit()
-        self.status = QComboBox()
-        self.description = QPlainTextEdit()
+        self.title = named(QLineEdit(), "Title")
+        self.status = named(QComboBox(), "Status")
+        self.description = named(keyboard_text(QPlainTextEdit()), "Description")
         self.description.setMaximumHeight(90)
-        self.items = QLineEdit()
+        self.items = named(QLineEdit(), "Affected items")
         self.items.setPlaceholderText("Affected item IDs, comma separated")
         self.use_for_edits = QCheckBox("Attribute my edits to this change request")
-        self.edited = QListWidget()
+        self.edited = named(keyboard_view(QListWidget()), "Items edited under this change request")
         self.edited.setMaximumHeight(90)
         self.new_button = QPushButton("New")
+        secondary(self.new_button)
         self.save_button = QPushButton("Save")
+        self.empty_hint = QLabel("No change requests yet. Fill in the form below and press New.")
+        self.empty_hint.setObjectName("Empty")
         form = QFormLayout()
         form.addRow("Title", self.title)
         form.addRow("Status", self.status)
@@ -66,6 +72,7 @@ class ChangesView(QWidget):
         buttons.addWidget(self.new_button)
         buttons.addWidget(self.save_button)
         lay = QVBoxLayout(self)
+        lay.addWidget(self.empty_hint)
         lay.addWidget(self.table, 2)
         lay.addWidget(self.heading)
         lay.addLayout(form)
@@ -73,6 +80,10 @@ class ChangesView(QWidget):
         lay.addWidget(QLabel("Edited under this change request"))
         lay.addWidget(self.edited)
         self.table.selectionModel().currentRowChanged.connect(self._on_row)
+        self.table.activated.connect(self._on_table_activated)
+        self.edited.itemActivated.connect(
+            lambda it: self.item_requested.emit(it.text().split()[0]) if it.text() else None
+        )
         self.new_button.clicked.connect(self._new_from_form)
         self.save_button.clicked.connect(self.save)
         self.use_for_edits.toggled.connect(self._toggle_edits)
@@ -108,8 +119,15 @@ class ChangesView(QWidget):
                 self.table.selectRow(row)
         finally:
             self._refreshing = False
+        self.empty_hint.setVisible(not rows)
         if self.current_id and row >= 0 and not self._form_dirty():
             self._load(self.current_id)
+
+    def _on_table_activated(self, index: QModelIndex) -> None:
+        """Enter on a change request opens the first item it affects."""
+        uid = item_in_row(self.model, index.row(), 4, lambda u: self.session.item(u) is not None)
+        if uid:
+            self.item_requested.emit(uid)
 
     def _row_of(self, cr_id: str) -> int:
         return next((r for r in range(self.model.rowCount()) if self.model.index(r, 0).data() == cr_id), -1)
@@ -172,6 +190,7 @@ class ChangesView(QWidget):
             return None
         self.current_id = cr.id
         self.refresh()
+        self._load(cr.id)  # the form and its snapshot now describe the new request, not the half-typed draft
         self.message.emit("success", f"Created {cr.id}.")
         return cr.id
 
@@ -198,6 +217,7 @@ class ChangesView(QWidget):
             self.message.emit("error", str(exc))
             return
         self.refresh()
+        self._load(self.current_id)
         self.message.emit("success", f"Saved {self.current_id}.")
 
     def _toggle_edits(self, on: bool) -> None:

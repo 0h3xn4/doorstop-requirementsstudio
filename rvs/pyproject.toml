@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]  # 77 understands the SPDX licence expression and license-files (PEP 639)
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,7 +7,9 @@ name = "rvs"
 version = "0.1.0"
 description = "Requirements & Verification Studio - offline requirements management on Doorstop"
 requires-python = ">=3.11,<3.14"
-license = { text = "Proprietary" }
+license = "LicenseRef-Proprietary"  # internal software (docs/DECISIONS.md D10); see LICENSE
+license-files = ["LICENSE"]
+readme = "README.md"
 dependencies = [
     "doorstop==3.2",
     "PySide6-Essentials==6.12.0",
@@ -28,7 +30,6 @@ dev = [
     "hypothesis>=6",
     "mypy>=1.10",
     "ruff>=0.5",
-    "import-linter>=2",
     "pyinstaller>=6",
     "cyclonedx-bom>=4",
     "pip-licenses>=5",

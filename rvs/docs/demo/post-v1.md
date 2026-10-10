@@ -1,5 +1,8 @@
 # Post-v1 additions demo note
 
+> **Point-in-time snapshot.** Written when this milestone was finished: test counts, timings, caveats and command forms were true then and are not updated. For the current state see the user guide, `docs/DECISIONS.md`, `docs/DEVIATIONS.md` and `docs/RELEASE.md`.
+
+
 ```
 rvs export examples/satellite300 --reqif -o satellite.reqif          # exchange file for other tools
 rvs import my-project customer.reqif --document SYS --map "Customer Ref=source" --dry-run

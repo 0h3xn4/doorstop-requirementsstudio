@@ -174,9 +174,11 @@ def test_graph_node_click_opens_the_item(win: MainWindow):
 
 
 # fast open / full validation ------------------------------------------------------------------------------
-def test_open_is_fast_mode_and_full_validation_adds_doorstop_findings(win: MainWindow):
+def test_open_is_fast_mode_and_full_validation_adds_doorstop_findings(win: MainWindow, qtbot):  # type: ignore[no-untyped-def]
     assert not [f for f in win.session.findings if f.code.startswith("DOORSTOP-")]
-    win.run_full_validation()
+    with qtbot.waitSignal(win.validation_finished, timeout=60000) as done:  # runs on a worker thread now
+        win.run_full_validation()
+    assert done.args == [True]
     assert any(f.code == "DOORSTOP-UNREVIEWED" for f in win.session.findings)
     win.session.refresh()  # any later edit goes back to the fast path
     assert not [f for f in win.session.findings if f.code.startswith("DOORSTOP-")]

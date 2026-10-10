@@ -149,8 +149,9 @@ def _request(args: argparse.Namespace) -> ExportRequest:
 
 
 def _default_format(args: argparse.Namespace) -> str:
-    if args.output is not None and args.output.suffix.lower().lstrip(".") in (*TABLE_FORMATS, "reqif"):
-        return args.output.suffix.lower().lstrip(".")
+    suffix = str(args.output.suffix).lower().lstrip(".") if args.output is not None else ""
+    if suffix in (*TABLE_FORMATS, "reqif"):
+        return suffix
     return "reqif" if args.reqif else "html" if args.spec else "csv"
 
 

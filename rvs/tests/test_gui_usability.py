@@ -163,11 +163,12 @@ def test_open_example_generates_a_copy_and_opens_it(win: MainWindow, tmp_path: P
     assert win.open_example("nope", tmp_path / "x") is False
 
 
-def test_recent_projects_menu_lists_opened_projects(win: MainWindow, minimal_project: Path):
+def test_recent_projects_menu_lists_opened_projects(win: MainWindow, minimal_project: Path, qtbot):  # type: ignore[no-untyped-def]
     texts = [a.text() for a in win.recent_menu.actions()]
     assert any(str(minimal_project) in t for t in texts)
-    win.recent_menu.actions()[0].trigger()
-    assert win.session.root == minimal_project
+    with qtbot.waitSignal(win.project_opened, timeout=60000) as opened:  # opening from the menu is asynchronous
+        win.recent_menu.actions()[0].trigger()
+    assert opened.args == [True] and win.session.root == minimal_project
 
 
 # help -----------------------------------------------------------------------------------------------------------------------

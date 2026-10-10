@@ -1,5 +1,6 @@
 """Run a function on the global thread pool and report back on the GUI thread (windows stay responsive)."""
 
+import gc
 import sys
 from collections.abc import Callable
 from typing import Any
@@ -23,13 +24,19 @@ class _Signals(QObject):
     def _handle_done(self, value: object) -> None:
         _alive.discard(self)
         _job_finished()
-        self._on_done(value)
+        try:
+            self._on_done(value)
+        finally:
+            _collect_garbage()
 
     @Slot(object)
     def _handle_failed(self, error: object) -> None:
         _alive.discard(self)
         _job_finished()
-        self._on_failed(error)  # type: ignore[arg-type]
+        try:
+            self._on_failed(error)  # type: ignore[arg-type]
+        finally:
+            _collect_garbage()
 
 
 class _Task(QRunnable):
@@ -69,6 +76,14 @@ def _job_finished() -> None:
     if not _alive_count() and _saved_interval is not None:
         sys.setswitchinterval(_saved_interval)
         _saved_interval = None
+
+
+def _collect_garbage() -> None:
+    """Collect reference cycles on the GUI thread once the last job has ended. A cycle that holds Qt wrapper objects and
+    is finalised by the collector on a worker thread destroys them off the GUI thread (a suspected cause of rare crashes);
+    collecting here, between jobs, makes that unlikely. Workers should also keep the objects they create short-lived."""
+    if not _alive_count():
+        gc.collect()
 
 
 def _alive_count() -> int:

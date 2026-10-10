@@ -1,5 +1,6 @@
 # Install Requirements & Verification Studio for the current user (no administrator rights, no network).
 # Run from the unpacked release folder:  powershell -ExecutionPolicy Bypass -File install.ps1 [-NoSelfTest] [-Prefix DIR]
+# Default folder: %LOCALAPPDATA%\Programs\rvs-studio. The PATH is not changed; a Start-menu shortcut is created.
 # NOTE: written for Windows but not yet tested on Windows (docs/DEVIATIONS.md V22).
 param([switch]$NoSelfTest, [string]$Prefix = "$env:LOCALAPPDATA\Programs\rvs-studio")
 $ErrorActionPreference = "Stop"
@@ -41,18 +42,31 @@ foreach ($f in Get-ChildItem -LiteralPath $app -Recurse -File -Force) {
     }
 }
 
-# 2. Copy next to the target, mark it as ours, then swap.
-$staging = "$Prefix.new"
-if (Test-Path -LiteralPath $staging) { Remove-Item -LiteralPath $staging -Recurse -Force }
-New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Prefix) | Out-Null
+# 2. Copy next to the target, mark it as ours, then swap. The two temporary folders get a fresh name that does not
+#    exist yet, and only folders created here are ever deleted (a folder that already carries a similar name is not ours).
+$parent = Split-Path -Parent $Prefix
+New-Item -ItemType Directory -Force -Path $parent | Out-Null
+$leaf = Split-Path -Leaf $Prefix
+$token = [guid]::NewGuid().ToString("N").Substring(0, 8)
+$staging = Join-Path $parent "$leaf.$token.new"
+$old = Join-Path $parent "$leaf.$token.old"
+if ((Test-Path -LiteralPath $staging) -or (Test-Path -LiteralPath $old)) { throw "$staging or $old already exists; run the installer again." }
+$movedOld = $false
 try {
-    Copy-Item -LiteralPath $app -Destination $staging -Recurse -Force
+    New-Item -ItemType Directory -Path $staging -ErrorAction Stop | Out-Null   # fails instead of reusing an existing folder
+    Get-ChildItem -LiteralPath $app -Force | Copy-Item -Destination $staging -Recurse -Force
     Set-Content -LiteralPath (Join-Path $staging ".install-prefix") -Value $Prefix -Encoding UTF8
-    if (Test-Path -LiteralPath $Prefix) { Remove-Item -LiteralPath $Prefix -Recurse -Force }
+    if (Test-Path -LiteralPath $Prefix) { Move-Item -LiteralPath $Prefix -Destination $old; $movedOld = $true }
     Move-Item -LiteralPath $staging -Destination $Prefix
+    $staging = $null
 } catch {
-    if (Test-Path -LiteralPath $staging) { Remove-Item -LiteralPath $staging -Recurse -Force }
+    # put the previous installation back if the swap stopped half-way, and remove only what this script created
+    if ($movedOld -and -not (Test-Path -LiteralPath $Prefix) -and (Test-Path -LiteralPath $old)) { Move-Item -LiteralPath $old -Destination $Prefix }
+    if ($staging -and (Test-Path -LiteralPath $staging)) { Remove-Item -LiteralPath $staging -Recurse -Force }
     throw
+}
+if ($movedOld) {
+    try { Remove-Item -LiteralPath $old -Recurse -Force } catch { Write-Warning "The previous installation could not be removed completely; delete $old yourself." }
 }
 
 # 3. Start-menu shortcut.

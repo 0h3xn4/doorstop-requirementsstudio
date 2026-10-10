@@ -5,6 +5,7 @@ from PySide6.QtGui import QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import QTreeView
 
 from rvs_gui.session import ProjectSession
+from rvs_gui.widgets import keyboard_view, named
 
 ROLE_KIND = Qt.ItemDataRole.UserRole + 1  # "all" | "doc" | "item"
 ROLE_KEY = Qt.ItemDataRole.UserRole + 2  # prefix or uid
@@ -18,6 +19,8 @@ class DocumentTree(QTreeView):
         super().__init__()
         self._model = QStandardItemModel(self)
         self.setModel(self._model)
+        keyboard_view(self)
+        named(self, "Documents and items")
         self.setHeaderHidden(True)
         self._syncing = False
         self.selectionModel().currentChanged.connect(self._on_current)  # once: populate() runs after every refresh

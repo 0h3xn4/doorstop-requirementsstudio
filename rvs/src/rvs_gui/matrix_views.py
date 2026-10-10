@@ -1,5 +1,6 @@
 """Matrix tabs: a model that renders a MatrixTable, and the traceability, VCM and coverage views."""
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +19,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from rvs_core import atomicio
 from rvs_core.exporters import TABLE_FORMATS, render_table
 from rvs_core.matrices import (
     MatrixTable,
@@ -33,6 +35,7 @@ from rvs_gui.jobs import run_in_background
 from rvs_gui.models import Index
 from rvs_gui.session import ProjectSession
 from rvs_gui.theme import TOKENS
+from rvs_gui.widgets import keyboard_view, named, secondary
 
 _GAP_TOKEN = {"unverified-approved": "gap_error", "orphan": "gap_error"}  # every other flag is a warning
 
@@ -71,17 +74,34 @@ class MatrixTableModel(QAbstractTableModel):
         return None
 
 
+def item_in_row(model: "MatrixTableModel", row: int, column: int, known: Callable[[str], bool]) -> str | None:
+    """The item ID a matrix row stands for: one named in the cell that was activated, else the first one in the row.
+    A cell may list several IDs ('EPS-0001, EPS-0002'); the first that exists wins."""
+    columns = [column, *[c for c in range(model.columnCount()) if c != column]]
+    for col in columns:
+        text = str(model.index(row, col).data() or "")
+        for token in text.replace(";", ",").replace("\n", ",").split(","):
+            token = token.strip().split(" ")[0]
+            if token and known(token):
+                return token
+    return None
+
+
 class MatrixView(QWidget):
     """Title block (provenance, notes), a table and an export button. Subclasses add filter controls."""
 
     message = Signal(str, str)
     export_done = Signal(str, str)  # (path, error message or '')
+    item_requested = Signal(str)  # Enter or double-click on a row that names an item
+
+    table_name = "Matrix"
 
     def __init__(self, session: ProjectSession) -> None:
         super().__init__()
         self.session = session
+        self.setMinimumSize(480, 200)  # a tab page never forces the window to be large
         self.model = MatrixTableModel(self)
-        self.table = QTableView()
+        self.table = named(keyboard_view(QTableView()), self.table_name)
         self.table.setModel(self.model)
         self.table.setAlternatingRowColors(True)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -92,6 +112,7 @@ class MatrixView(QWidget):
         self.notes_label = QLabel()
         self.notes_label.setWordWrap(True)
         self.export_button = QPushButton("Export…")
+        secondary(self.export_button)
         self.export_button.clicked.connect(self._choose_export)
         self.controls = QHBoxLayout()
         self.controls.addStretch(1)
@@ -102,8 +123,14 @@ class MatrixView(QWidget):
         lay.addWidget(self.notes_label)
         lay.addWidget(self.table, 1)
         self.table.horizontalHeader().setResizeContentsPrecision(100)  # size columns from the first rows, not all 5,000
+        self.table.activated.connect(self._on_activated)
         self._stale = False
         session.loaded.connect(self._on_session_loaded)
+
+    def _on_activated(self, index: QModelIndex) -> None:
+        uid = item_in_row(self.model, index.row(), index.column(), lambda u: self.session.item(u) is not None)
+        if uid:
+            self.item_requested.emit(uid)
 
     def restyle(self) -> None:
         self.provenance_label.setStyleSheet(f"color: {TOKENS['text_secondary']};")
@@ -168,7 +195,7 @@ class MatrixView(QWidget):
         table = self.matrix
 
         def work() -> int:
-            path.write_bytes(render_table(table, fmt))
+            atomicio.write_bytes(path, render_table(table, fmt))
             return len(table.rows)
 
         def done(count: int) -> None:
@@ -188,7 +215,7 @@ class MatrixView(QWidget):
 
     def export_csv(self, path: Path) -> None:
         try:
-            path.write_text(to_csv(self.matrix), encoding="utf-8", newline="\n")
+            atomicio.write_text(path, to_csv(self.matrix))
         except OSError as exc:
             self.message.emit(
                 "error", f"The file {path} could not be written: {exc.strerror}. Choose another location."
@@ -203,13 +230,24 @@ def _combo(items: list[str], parent: QWidget | None = None) -> QComboBox:
     return box
 
 
+def _buddy(text: str, widget: QWidget) -> QLabel:
+    """A caption that names ``widget`` for screen readers and moves the focus to it on its mnemonic."""
+    label = QLabel(text)
+    label.setBuddy(widget)
+    return label
+
+
 class TraceabilityView(MatrixView):
+    table_name = "Traceability matrix"
+
     def __init__(self, session: ProjectSession) -> None:
         super().__init__(session)
-        self.source, self.target, self.direction = QComboBox(), QComboBox(), _combo(["down", "up"])
-        self.controls.insertWidget(0, QLabel("From"))
+        self.source = named(QComboBox(), "From document")
+        self.target = named(QComboBox(), "To document")
+        self.direction = named(_combo(["down", "up"]), "Direction")
+        self.controls.insertWidget(0, _buddy("From", self.source))
         self.controls.insertWidget(1, self.source)
-        self.controls.insertWidget(2, QLabel("to"))
+        self.controls.insertWidget(2, _buddy("to", self.target))
         self.controls.insertWidget(3, self.target)
         self.controls.insertWidget(4, self.direction)
         self.direction.setToolTip("down: the items below each row; up: the items above each row")
@@ -255,9 +293,14 @@ class TraceabilityView(MatrixView):
 
 
 class VcmView(MatrixView):
+    table_name = "Verification control matrix"
+
     def __init__(self, session: ProjectSession) -> None:
         super().__init__(session)
-        self.document, self.method, self.level, self.status = QComboBox(), QComboBox(), QComboBox(), QComboBox()
+        self.document = named(QComboBox(), "Document filter")
+        self.method = named(QComboBox(), "Verification method filter")
+        self.level = named(QComboBox(), "Verification level filter")
+        self.status = named(QComboBox(), "Verification status filter")
         self.only_gaps = QCheckBox("Only unverified")
         for i, box in enumerate((self.document, self.method, self.level, self.status)):
             self.controls.insertWidget(i, box)
@@ -313,6 +356,8 @@ class VcmView(MatrixView):
 
 
 class CoverageView(MatrixView):
+    table_name = "Coverage by document"
+
     def build(self) -> MatrixTable | None:
         cfg, graph = self.session.cfg, self.session.graph
         assert cfg is not None and graph is not None

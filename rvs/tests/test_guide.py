@@ -131,3 +131,31 @@ def test_every_guide_image_exists_next_to_the_bundled_guide(built: str):
     for name in images:
         assert not name.startswith(("http", "data:")), name
         assert (path.parent / name).is_file(), f"{name}: run python scripts/build_screenshots.py"
+
+
+def test_every_shortcut_action_id_and_every_rule_parameter_is_documented(sources: str, built: str):
+    import yaml
+
+    from rvs_gui.shortcuts import SHORTCUTS
+
+    for action in SHORTCUTS:
+        assert f"<code>{action}</code>" in built, f"action ID {action} is missing from the settings table"
+    config = ROOT / "src" / "rvs_core" / "config" / "defaults"
+    for rule in yaml.safe_load((config / "rules.yaml").read_text())["rules"]:
+        for param in rule.get("params", {}):
+            assert f"`{param}`" in sources, f"parameter {param} of rule {rule['id']} is not documented"
+
+
+def test_guide_states_the_facts_the_audit_found_missing(sources: str):
+    required = [
+        "Turn on version control", "--init-git", "Git does not have to be installed",
+        "SOURCE_DATE_EPOCH", "RVS_DEBUG", "glibc 2.38", "install.ps1", "never been run on Windows",
+        "libxcb-cursor0", "libxcb-util1", "libegl1", "reason_required_statuses", "open_statuses",
+        "does not use Doorstop's review feature",
+        "[-old-]", "{+new+}", "baseline list PROJECT [--format text|json]", "executed_on", "nonconformances", "proc_id",
+        "waived", "rvs-example-satellite", "Nothing to remove", "Only unverified", "TODO-COMPANY",
+        "root document", "fingerprint", "provenance", "digest", "manifest", "rvs/baseline/<folder>/<name>",
+    ]  # fmt: skip
+    text = sources.replace("**", "").replace("*", "")
+    missing = [r for r in required if r.lower() not in text.lower()]
+    assert not missing, missing

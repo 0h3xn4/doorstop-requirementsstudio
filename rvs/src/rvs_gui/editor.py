@@ -1,6 +1,7 @@
 """Requirement editor: structured form (generated from the document template), Markdown statement with
 live preview, parent links, a mandatory-when-baselined reason, and the item's own findings."""
 
+from collections.abc import Callable
 from typing import Any
 
 from PySide6.QtCore import QEvent, QObject, Qt, Signal
@@ -10,6 +11,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QListWidget,
+    QListWidgetItem,
     QPlainTextEdit,
     QPushButton,
     QScrollArea,
@@ -27,9 +29,18 @@ from rvs_gui.completion import UidLineEdit
 from rvs_gui.fields import normalise as _norm
 from rvs_gui.fields import parse_list as _parse_list
 from rvs_gui.session import ProjectSession
-from rvs_gui.widgets import AcronymHighlighter
+from rvs_gui.widgets import AcronymHighlighter, keyboard_text, named, secondary
 
 NO_FIELD_HELP = "Select a field to see what it means."
+STATEMENT_HELP = "The requirement text. Markdown is allowed; one 'shall' per requirement. Acronyms that are not in the glossary are underlined."
+REASON_HELP = (
+    "Why you are changing this item. It is required once the item is baselined, and is kept in the item's history."
+)
+SUSPECT_TIP = (
+    "A suspect link means a parent item changed after this item was last reviewed. "
+    "Review the parent, then use this button to accept its current state."
+)
+NO_SUSPECT_TIP = SUSPECT_TIP + "\nNothing to clear now: no parent item has changed since this item was last reviewed."
 
 # Attributes edited elsewhere or managed by RVS.
 _HIDDEN = {"rvs_schema_version"}
@@ -51,8 +62,11 @@ class RequirementEditor(QWidget):
         self._loading = False
         self._last_dirty = False
         self._help_visible = True
-        self._cfg_built: object | None = None
-        self._help_for: dict[QWidget, str] = {}
+        self._signature: object | None = None
+        self._help_for: dict[QWidget, str] = {}  # the form fields (rebuilt with the form)
+        self._static_help: dict[QWidget, str] = {}  # the fixed widgets: statement, reason, buttons
+        # Asked before unsaved edits are thrown away by Revert; the main window replaces it with a question to the user.
+        self.confirm_discard: Callable[[str], bool] = lambda _uid: True
 
         self.heading = QLabel("No item selected")
         self.heading.setStyleSheet("font-size: 18px; font-weight: 600;")
@@ -60,22 +74,28 @@ class RequirementEditor(QWidget):
         self.form.setVerticalSpacing(2)
         self.form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         self.form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
-        self.statement = QPlainTextEdit()
+        self.statement = named(keyboard_text(QPlainTextEdit()), "Requirement statement")
         self.statement.setPlaceholderText("Requirement statement (Markdown)")
-        self.preview = QTextBrowser()
+        self.preview = named(QTextBrowser(), "Statement preview")
         self.preview.setOpenLinks(False)
         self.preview.setOpenExternalLinks(False)
         self.highlighter = AcronymHighlighter(self.statement.document())
-        self.why = QLineEdit()
+        self.why = named(QLineEdit(), "Reason for change")
         self.why.setPlaceholderText("Reason for change (required once an item is baselined)")
+        self.why.setMinimumWidth(240)
         self.save_button = QPushButton("Save")
         self.revert_button = QPushButton("Revert")
+        secondary(self.revert_button)
         self.clear_suspect_button = QPushButton("Clear suspect links")
-        self.clear_suspect_button.setToolTip("Accept the current state of the parent items this item links to")
+        secondary(self.clear_suspect_button)
+        self.clear_suspect_button.setToolTip(NO_SUSPECT_TIP)
         self.clear_suspect_button.setEnabled(False)
-        self.item_findings = QListWidget()
+        self.item_findings = named(QListWidget(), "Problems with this item")
         self.item_findings.setMaximumHeight(72)
         self.item_findings.setWordWrap(True)
+        self.item_findings.setTabKeyNavigation(False)
+        self.no_findings = QLabel("No problems with this item.")
+        self.no_findings.setObjectName("Empty")
 
         text_split = QSplitter()
         text_split.addWidget(self.statement)
@@ -86,7 +106,7 @@ class RequirementEditor(QWidget):
         self.form_scroll.setWidgetResizable(True)
         self.form_scroll.setWidget(form_holder)
         self.form_scroll.setFrameShape(QScrollArea.Shape.NoFrame)
-        self.form_scroll.setMinimumHeight(200)
+        self.form_scroll.setMinimumHeight(120)
         # Guided mode explains the field being edited here, instead of a help line under every field (which left
         # room for only three fields at once).
         self.help_line = fields.help_label(NO_FIELD_HELP)
@@ -104,16 +124,29 @@ class RequirementEditor(QWidget):
         vertical.setStretchFactor(0, 5)
         vertical.setStretchFactor(1, 2)
         buttons = QHBoxLayout()
-        buttons.addWidget(self.why, 1)
+        buttons.addStretch(1)
         buttons.addWidget(self.clear_suspect_button)
         buttons.addWidget(self.revert_button)
         buttons.addWidget(self.save_button)
         root = QVBoxLayout(self)
         root.addWidget(self.heading)
         root.addWidget(vertical, 1)
+        root.addWidget(self.why)  # the reason has a row of its own: it was squeezed to a sliver beside three buttons
         root.addLayout(buttons)
         root.addWidget(QLabel("Problems with this item"))
         root.addWidget(self.item_findings)
+        root.addWidget(self.no_findings)
+        self.no_findings.hide()
+        for widget, text in (
+            (self.statement, STATEMENT_HELP),
+            (self.preview, "A preview of the statement as it will be exported."),
+            (self.why, REASON_HELP),
+            (self.save_button, ""),
+            (self.revert_button, ""),
+            (self.clear_suspect_button, ""),
+        ):
+            self._static_help[widget] = text  # an empty text resets the help line to the generic hint
+            widget.installEventFilter(self)
 
         self.statement.textChanged.connect(self._on_edited)
         self.why.textChanged.connect(self._update_buttons)
@@ -148,6 +181,7 @@ class RequirementEditor(QWidget):
         parents.setPlaceholderText("Parent item IDs, comma separated" if not root_doc else "Root document: no parents")
         parents.setEnabled(not root_doc)
         parents.setMinimumHeight(32)
+        parents.setAccessibleName("Parents")
         parents.setToolTip(
             "The requirements this one derives from (items of the parent document). Item IDs, comma separated."
         )
@@ -160,7 +194,48 @@ class RequirementEditor(QWidget):
             if not root_doc
             else "A top-level document: its requirements have no parents.",
         )
-        self._cfg_built = cfg
+        self._signature = self._form_signature(item)
+        self._apply_tab_order()
+
+    def _form_signature(self, item: ItemData) -> object:
+        """Everything the form is built from, as a cheap comparable value. The configuration object itself is replaced on
+        every refresh (each save), but the form only has to be rebuilt when this changes: rebuilding it on every save
+        threw away the keyboard focus and the scroll position."""
+        cfg = self.session.cfg
+        assert cfg is not None
+        kind = self.session.kind_of(item.document)
+        decl = cfg.project.document(item.document)
+        defs = tuple(
+            (a.name, a.type, a.vocab, a.required, a.help)
+            for a in [*cfg.templates.kinds[kind].attributes, *cfg.project.free_attributes]
+        )
+        vocabs = tuple((a[0], tuple(cfg.vocab.values(str(a[2])))) for a in defs if a[1] == "enum" and a[2])
+        return (kind, item.document, decl.parent if decl else None, defs, vocabs)
+
+    def focus_chain(self) -> list[QWidget]:
+        """The widgets in the order Tab visits them: fields top to bottom, statement, reason, buttons."""
+        chain = [self._fields[a.name] for a in self._defs if a.name in self._fields]
+        if "parents" in self._fields:
+            chain.append(self._fields["parents"])
+        chain += [self.statement, self.why, self.clear_suspect_button, self.revert_button, self.save_button]
+        return chain
+
+    def _apply_tab_order(self) -> None:
+        """Creation order is not visual order for a form that is rebuilt per document: say it explicitly."""
+        chain = self.focus_chain()
+        for before, after in zip(chain, chain[1:], strict=False):
+            QWidget.setTabOrder(before, after)
+
+    def first_focus_widget(self) -> QWidget:
+        """Where keyboard users arrive from the item table: the statement (the one field every item has)."""
+        return self.statement
+
+    def focus_editor(self) -> bool:
+        """Move the keyboard focus into the form. False when there is no item to edit."""
+        if not self.isEnabled():
+            return False
+        self.statement.setFocus(Qt.FocusReason.ShortcutFocusReason)
+        return True
 
     def _configure_highlighter(self) -> None:
         cfg = self.session.cfg
@@ -181,7 +256,7 @@ class RequirementEditor(QWidget):
         self.current_uid = None
         self._fields.clear()
         self._defs = []
-        self._cfg_built = None
+        self._signature = None
         self._loading = True
         try:
             self.statement.clear()
@@ -194,6 +269,9 @@ class RequirementEditor(QWidget):
         finally:
             self._loading = False
         self.clear_suspect_button.setEnabled(False)
+        self.clear_suspect_button.setToolTip(NO_SUSPECT_TIP)
+        self.item_findings.hide()
+        self.no_findings.hide()
         self.setEnabled(False)
         self._update_buttons()
 
@@ -202,8 +280,11 @@ class RequirementEditor(QWidget):
         widget.installEventFilter(self)
 
     def eventFilter(self, obj: QObject, event: QEvent) -> bool:  # noqa: N802 - Qt API
-        if event.type() == QEvent.Type.FocusIn and isinstance(obj, QWidget) and obj in self._help_for:
-            self.help_line.setText(self._help_for[obj] or NO_FIELD_HELP)
+        if event.type() == QEvent.Type.FocusIn and isinstance(obj, QWidget):
+            if obj in self._help_for:
+                self.help_line.setText(self._help_for[obj] or NO_FIELD_HELP)
+            elif obj in self._static_help:  # the statement, the reason, the buttons: never leave the last field's help
+                self.help_line.setText(self._static_help[obj] or NO_FIELD_HELP)
         return False
 
     def restyle(self) -> None:
@@ -226,7 +307,7 @@ class RequirementEditor(QWidget):
 
     @staticmethod
     def _set(widget: QWidget, value: Any, kind: str) -> None:
-        fields.set_value(widget, value)
+        fields.set_value(widget, value, kind)
 
     def load(self, uid: str) -> None:
         item = self.session.item(uid)
@@ -238,7 +319,7 @@ class RequirementEditor(QWidget):
                 self._item is None
                 or self._item.document != item.document
                 or not self._fields
-                or self._cfg_built is not self.session.cfg  # the project or its configuration changed
+                or self._signature != self._form_signature(item)  # the template, vocabulary or document changed
             ):
                 self._rebuild_form(item)
             self._configure_highlighter()
@@ -252,18 +333,31 @@ class RequirementEditor(QWidget):
             self.statement.setPlainText(item.text.strip())
             self.why.clear()
             self._refresh_findings()
-            self.clear_suspect_button.setEnabled(bool(self.session.suspect_parents(uid)))
+            self._update_suspect_button(uid)
             self.setEnabled(True)
         finally:
             self._loading = False
         self._on_edited()
         self.item_loaded.emit(uid)
 
+    def _update_suspect_button(self, uid: str | None) -> None:
+        suspect = self.session.suspect_parents(uid) if uid else []
+        self.clear_suspect_button.setEnabled(bool(suspect))
+        self.clear_suspect_button.setToolTip(
+            f"{SUSPECT_TIP}\nSuspect parents: {', '.join(suspect)}." if suspect else NO_SUSPECT_TIP
+        )
+
     def _refresh_findings(self) -> None:
         self.item_findings.clear()
         if self.current_uid:
             for f in self.session.findings_for(self.current_uid):
-                self.item_findings.addItem(f"{f.severity.value.upper()}  {f.message} {f.hint}".strip())
+                entry = QListWidgetItem(f"{f.severity.value.upper()}  {f.message} {f.hint}".strip())
+                if "suspect" in f.code.lower() or "suspect" in f.message.lower():
+                    entry.setToolTip(SUSPECT_TIP)
+                self.item_findings.addItem(entry)
+        empty = self.item_findings.count() == 0
+        self.item_findings.setVisible(not empty)
+        self.no_findings.setVisible(empty and self.current_uid is not None)
 
     # dirty tracking ###########################################################
     def changes(self) -> tuple[str | None, dict[str, Any], list[str] | None]:
@@ -319,9 +413,15 @@ class RequirementEditor(QWidget):
         self.load(uid)
         self.message.emit("success", f"Cleared the suspect links of {uid}.")
 
-    def revert(self) -> None:
-        if self.current_uid:
-            self.load(self.current_uid)
+    def revert(self) -> bool:
+        """Reload the item from disk. Unsaved edits are only thrown away after confirm_discard says so."""
+        uid = self.current_uid
+        if not uid:
+            return False
+        if self.is_dirty() and not self.confirm_discard(uid):
+            return False
+        self.load(uid)
+        return True
 
     def save(self) -> bool:
         uid = self.current_uid

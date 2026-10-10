@@ -1,9 +1,17 @@
+.venv/
+venv/
 .venv-sbom/
 dist/
 build/
 wheelhouse/
 *.egg-info/
 __pycache__/
+*.py[cod]
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.hypothesis/
+.coverage
+htmlcov/
+.vscode/
+.idea/

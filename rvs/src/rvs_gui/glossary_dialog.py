@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
@@ -16,10 +17,11 @@ from PySide6.QtWidgets import (
 
 from rvs_core.glossary import save_glossary
 from rvs_gui.session import ProjectSession
+from rvs_gui.widgets import keyboard_view, named, secondary
 
 
-def _table(headers: tuple[str, str]) -> QTableWidget:
-    table = QTableWidget(0, 2)
+def _table(headers: tuple[str, str], name: str) -> QTableWidget:
+    table = named(keyboard_view(QTableWidget(0, 2)), name)
     table.setHorizontalHeaderLabels(list(headers))
     table.horizontalHeader().setStretchLastSection(True)
     table.setColumnWidth(0, 180)
@@ -35,16 +37,24 @@ class GlossaryDialog(QDialog):
         self.setWindowTitle("Glossary and acronyms")
         self.resize(640, 480)
         self.message = QLabel("")
-        self.acronyms = _table(("Acronym", "Expansion"))
-        self.terms = _table(("Term", "Definition"))
+        self.message.setWordWrap(True)
+        self.message.setAccessibleName("Problems in the glossary")
+        self.acronyms = _table(("Acronym", "Expansion"), "Acronyms")
+        self.terms = _table(("Term", "Definition"), "Terms")
+        self.new_acronym = named(QLineEdit(), "New acronym")
+        self.new_expansion = named(QLineEdit(), "Expansion of the new acronym")
+        self.new_term = named(QLineEdit(), "New term")
+        self.new_definition = named(QLineEdit(), "Definition of the new term")
         for acronym, expansion in sorted(session.cfg.glossary.acronyms.items()):
             self._append(self.acronyms, acronym, expansion)
         for term, definition in sorted(session.cfg.glossary.terms):
             self._append(self.terms, term, definition)
         tabs = QTabWidget()
-        tabs.addTab(self._with_buttons(self.acronyms, "acronym"), "Acronyms")
-        tabs.addTab(self._with_buttons(self.terms, "term"), "Terms")
+        tabs.addTab(self._with_buttons(self.acronyms, "acronym", self.new_acronym, self.new_expansion), "Acronyms")
+        tabs.addTab(self._with_buttons(self.terms, "term", self.new_term, self.new_definition), "Terms")
+        self.tabs = tabs
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
+        secondary(buttons.button(QDialogButtonBox.StandardButton.Cancel))
         buttons.accepted.connect(self._accept)
         buttons.rejected.connect(self.reject)
         lay = QVBoxLayout(self)
@@ -53,16 +63,34 @@ class GlossaryDialog(QDialog):
         lay.addWidget(self.message)
         lay.addWidget(buttons)
 
-    def _with_buttons(self, table: QTableWidget, what: str) -> QWidget:
+    def _with_buttons(self, table: QTableWidget, what: str, first: QLineEdit, second: QLineEdit) -> QWidget:
+        """The table, a row to type a new entry in (checked before it is added), and a button to remove rows."""
+        first.setPlaceholderText(table.horizontalHeaderItem(0).text())  # type: ignore[union-attr]
+        second.setPlaceholderText(table.horizontalHeaderItem(1).text())  # type: ignore[union-attr]
         add = QPushButton(f"Add {what}")
         remove = QPushButton("Remove selected")
-        add.clicked.connect(lambda: self._append(table, "", ""))
+        secondary(remove)
+        adder = self.add_acronym if what == "acronym" else self.add_term
+
+        def add_clicked() -> None:
+            if adder(first.text(), second.text()):  # same checks as every other way in
+                first.clear()
+                second.clear()
+                first.setFocus()
+
+        add.clicked.connect(add_clicked)
+        first.returnPressed.connect(add_clicked)
+        second.returnPressed.connect(add_clicked)
         remove.clicked.connect(lambda: self._remove_selected(table))
         holder = QWidget()
         lay = QVBoxLayout(holder)
+        entry = QHBoxLayout()
+        entry.addWidget(first, 1)
+        entry.addWidget(second, 2)
+        entry.addWidget(add)
+        lay.addLayout(entry)
         lay.addWidget(table, 1)
         row = QHBoxLayout()
-        row.addWidget(add)
         row.addWidget(remove)
         row.addStretch(1)
         lay.addLayout(row)
@@ -119,8 +147,44 @@ class GlossaryDialog(QDialog):
         acronyms = {a: e for a, e in self._texts(self.acronyms) if len(a) >= 2 and e}
         return terms, acronyms
 
+    def problems(self) -> list[tuple[QTableWidget, int, str]]:
+        """Every row that cannot be saved, with a sentence saying why. Rows left completely empty are ignored."""
+        out: list[tuple[QTableWidget, int, str]] = []
+        for table, label, first_name, second_name, min_length in (
+            (self.acronyms, "Acronyms", "acronym", "expansion", 2),
+            (self.terms, "Terms", "term", "definition", 1),
+        ):
+            seen: set[str] = set()
+            for row, (a, b) in enumerate(self._texts(table)):
+                if not a and not b:
+                    continue
+                where = f"{label}, row {row + 1}"
+                if not a:
+                    out.append((table, row, f"{where}: the {first_name} is missing."))
+                elif len(a) < min_length:
+                    out.append(
+                        (
+                            table,
+                            row,
+                            f"{where}: '{a}' is too short, an {first_name} has at least {min_length} characters.",
+                        )
+                    )
+                elif not b:
+                    out.append((table, row, f"{where}: '{a}' needs a {second_name}."))
+                elif a.lower() in seen:
+                    out.append((table, row, f"{where}: '{a}' appears more than once."))
+                seen.add(a.lower())
+        return out
+
     def save(self) -> bool:
         assert self.session.root is not None
+        bad = self.problems()
+        if bad:  # say which rows are wrong; saving would silently drop them
+            table, row, _text = bad[0]
+            self.tabs.setCurrentIndex(0 if table is self.acronyms else 1)
+            table.setCurrentCell(row, 0)
+            table.setFocus()
+            return self._say("Nothing was saved. Fix these rows first: " + " ".join(t for _tb, _r, t in bad))
         terms, acronyms = self.entries()
         try:
             save_glossary(self.session.root, terms, acronyms)

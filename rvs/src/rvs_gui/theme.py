@@ -16,6 +16,7 @@ LIGHT = {
     "text_secondary": "#525252",
     "interactive": "#0f62fe",
     "interactive_hover": "#0353e9",
+    "focus": "#0f62fe",
     "button_text": "#ffffff",
     "link": "#0f62fe",
     "support_error": "#da1e28",
@@ -44,6 +45,7 @@ DARK = {
     "text_secondary": "#c6c6c6",
     "interactive": "#0f62fe",
     "interactive_hover": "#0353e9",
+    "focus": "#ffffff",
     "button_text": "#ffffff",
     "link": "#78a9ff",
     "support_error": "#ff8389",
@@ -122,18 +124,43 @@ def stylesheet() -> str:
     t = TOKENS
     return f"""
 QWidget {{ font-family: "{FONT_SANS}"; font-size: 14px; color: {t["text"]}; background: {t["background"]}; }}
+QLabel {{ background: transparent; }}
 QMainWindow, QDockWidget {{ background: {t["layer"]}; }}
 QMenuBar {{ background: {t["header"]}; color: {t["header_text"]}; }}
 QMenuBar::item:selected {{ background: {t["interactive"]}; }}
 QStatusBar {{ background: {t["layer"]}; color: {t["text_secondary"]}; border-top: 1px solid {t["border"]}; }}
+QStatusBar QLabel {{ background: transparent; }}
 QDockWidget::title {{ background: {t["layer"]}; padding: 6px 8px; border-bottom: 1px solid {t["border"]}; }}
-QPushButton {{ background: {t["interactive"]}; color: {t["button_text"]}; border: none; padding: 10px 16px; }}
+QPushButton {{ background: {t["interactive"]}; color: {t["button_text"]}; border: 2px solid transparent;
+    padding: 8px 14px; }}
 QPushButton:hover {{ background: {t["interactive_hover"]}; }}
+QPushButton:default {{ border: 2px solid {t["button_text"]}; }}
+QPushButton:focus {{ background: {t["interactive_hover"]}; border: 2px solid {t["text"]}; }}
+QPushButton:disabled {{ background: {t["border"]}; color: {t["text_secondary"]}; border: 2px solid transparent; }}
+QPushButton[variant="secondary"] {{ background: {t["layer"]}; color: {t["text"]}; border: 2px solid {t["border_strong"]}; }}
+QPushButton[variant="secondary"]:hover {{ background: {t["border"]}; }}
+QPushButton[variant="secondary"]:focus {{ background: {t["layer"]}; border: 2px solid {t["focus"]}; }}
+QPushButton[variant="secondary"]:disabled {{ background: {t["layer"]}; color: {t["text_secondary"]};
+    border: 2px dashed {t["border"]}; }}
+QCheckBox {{ border: 2px solid transparent; padding: 2px; spacing: 6px; background: transparent; }}
+QCheckBox:focus {{ border: 2px solid {t["focus"]}; }}
+QCheckBox::indicator {{ width: 14px; height: 14px; border: 2px solid {t["border_strong"]};
+    background: {t["background"]}; }}
+QCheckBox::indicator:checked {{ background: {t["interactive"]}; border-color: {t["interactive"]}; }}
+QCheckBox::indicator:disabled {{ border-color: {t["border"]}; }}
 QHeaderView::section {{ background: {t["layer"]}; border: none; border-bottom: 1px solid {t["border_strong"]};
     padding: 6px 8px; font-weight: 600; }}
-QTableView, QTreeView {{ gridline-color: {t["border"]}; alternate-background-color: {t["layer"]}; }}
-QLineEdit, QTextEdit, QPlainTextEdit, QComboBox {{ background: {t["layer"]};
-    border: none; border-bottom: 1px solid {t["border_strong"]}; padding: 6px 8px; min-height: 22px; }}
-QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus {{ border: 2px solid {t["interactive"]}; }}
+QAbstractItemView {{ border: 2px solid {t["border"]}; gridline-color: {t["border"]};
+    alternate-background-color: {t["layer"]}; }}
+QAbstractItemView:focus {{ border: 2px solid {t["focus"]}; }}
+QAbstractItemView::item:selected, QAbstractItemView::item:selected:active, QAbstractItemView::item:selected:!active {{
+    background: {t["interactive"]}; color: {t["button_text"]}; }}
+QTabBar::tab {{ padding: 8px 14px; border: 2px solid transparent; background: {t["layer"]}; }}
+QTabBar::tab:selected {{ background: {t["background"]}; border-bottom: 2px solid {t["interactive"]}; }}
+QTabBar::tab:focus {{ border: 2px solid {t["focus"]}; }}
+QTabBar:focus {{ border: 2px solid {t["focus"]}; }}
+QLineEdit, QTextEdit, QPlainTextEdit, QComboBox {{ background: {t["layer"]}; placeholder-text-color: {t["text_secondary"]};
+    border: 2px solid transparent; border-bottom: 2px solid {t["border_strong"]}; padding: 4px 6px; min-height: 22px; }}
+QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QComboBox:focus {{ border: 2px solid {t["focus"]}; }}
 QLabel#Empty {{ color: {t["text_secondary"]}; background: transparent; }}
 """

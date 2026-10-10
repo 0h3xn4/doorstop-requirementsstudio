@@ -4,6 +4,7 @@ import os
 import shutil
 import stat
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -218,3 +219,275 @@ def test_projects_cannot_pull_in_local_files_with_include(minimal_project: Path)
     config.write_text(config.read_text() + "# x: !include /etc/hostname\n")
     with pytest.raises(ProjectError, match="!include"):
         DoorstopProject.open(minimal_project)
+
+
+# packaging review ---------------------------------------------------------------------------------------------------------------------
+def _run_env(
+    script: Path, home: Path, extra: dict[str, str], *args: str, cwd: Path | None = None
+) -> subprocess.CompletedProcess[str]:
+    env = {"HOME": str(home), "PATH": os.environ["PATH"], **extra}
+    return subprocess.run(["sh", str(script), *args], env=env, cwd=cwd, capture_output=True, text=True, check=False)  # noqa: S603
+
+
+def _siblings(prefix: Path) -> list[str]:
+    return sorted(p.name for p in prefix.parent.iterdir() if p.name != prefix.name)
+
+
+def test_install_never_touches_a_folder_that_has_the_old_staging_name(tmp_path: Path):
+    release, home = _release(tmp_path), tmp_path / "ho me"
+    prefix = home / ".local" / "opt" / "rvs-studio"
+    for leftover in (prefix.with_name("rvs-studio.new"), prefix.with_name("rvs-studio.old")):
+        leftover.mkdir(parents=True)
+        (leftover / "important.txt").write_text("not ours")
+    assert _run(release / "install.sh", home, "--no-selftest").returncode == 0
+    assert _run(release / "install.sh", home, "--no-selftest").returncode == 0  # and over an existing installation
+    for leftover in (prefix.with_name("rvs-studio.new"), prefix.with_name("rvs-studio.old")):
+        assert (leftover / "important.txt").read_text() == "not ours"
+    assert _siblings(prefix) == ["rvs-studio.new", "rvs-studio.old"]  # no temporary folder is left behind
+    assert (prefix / "rvs").is_file() and (prefix / ".install-prefix").is_file()
+    mode = prefix.stat().st_mode & 0o777
+    umask = os.umask(0)
+    os.umask(umask)
+    assert mode == 0o777 & ~umask  # mktemp makes a private folder; the installed one follows the umask
+
+
+def test_install_cut_short_in_the_swap_puts_the_previous_installation_back(tmp_path: Path):
+    release, home = _release(tmp_path), tmp_path / "home"
+    home.mkdir()
+    prefix = home / ".local" / "opt" / "rvs-studio"
+    assert _run(release / "install.sh", home, "--no-selftest").returncode == 0
+    (prefix / "marker-of-the-old-installation").write_text("old")
+    bin_dir = tmp_path / "fakebin"
+    bin_dir.mkdir()
+    fake = bin_dir / "mv"  # the move of the new files into place receives SIGTERM, as if the user pressed Ctrl+C
+    fake.write_text(
+        '#!/bin/sh\nfor last; do :; done\n[ "$last" = "$RVS_TEST_PREFIX" ] && [ ! -e "$RVS_TEST_FLAG" ] && { : > "$RVS_TEST_FLAG"; kill -TERM $PPID; exit 0; }\nexec "$RVS_TEST_MV" "$@"\n'
+    )
+    fake.chmod(0o755)
+    env = {
+        "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+        "RVS_TEST_PREFIX": str(prefix),
+        "RVS_TEST_FLAG": str(tmp_path / "signal-sent"),  # the signal is sent once, not again by the clean-up's own move
+        "RVS_TEST_MV": shutil.which("mv") or "/bin/mv",
+    }
+    result = _run_env(release / "install.sh", home, env, "--no-selftest")
+    assert result.returncode == 1
+    assert (prefix / "marker-of-the-old-installation").read_text() == "old"
+    assert _siblings(prefix) == []  # neither the staging folder nor the folder for the old installation is left
+
+
+def test_install_cut_short_while_copying_leaves_nothing_behind(tmp_path: Path):
+    release, home = _release(tmp_path), tmp_path / "home"
+    home.mkdir()
+    bin_dir = tmp_path / "fakebin"
+    bin_dir.mkdir()
+    fake = bin_dir / "cp"
+    fake.write_text("#!/bin/sh\nkill -INT $PPID\nsleep 1\nexit 0\n")
+    fake.chmod(0o755)
+    result = _run_env(
+        release / "install.sh", home, {"PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"}, "--no-selftest"
+    )
+    assert result.returncode == 1
+    opt = home / ".local" / "opt"
+    assert not opt.exists() or list(opt.iterdir()) == []
+
+
+def test_uninstall_twice_says_there_is_nothing_to_remove(tmp_path: Path):
+    release, home = _release(tmp_path), tmp_path / "ho me"
+    home.mkdir()
+    assert _run(release / "install.sh", home, "--no-selftest").returncode == 0
+    first = _run(release / "uninstall.sh", home)
+    assert first.returncode == 0 and "was removed" in first.stdout
+    second = _run(release / "uninstall.sh", home)
+    assert second.returncode == 0 and "Nothing to remove" in second.stdout
+    assert str(home / ".local" / "opt" / "rvs-studio") in second.stdout and second.stderr == ""
+
+
+def test_install_warns_about_missing_system_libraries_and_an_old_glibc_but_still_installs(tmp_path: Path):
+    release, home = _release(tmp_path), tmp_path / "home"
+    home.mkdir()
+    app = release / "rvs-studio"
+    plugin = app / "_internal" / "PySide6" / "Qt" / "plugins" / "platforms"
+    plugin.mkdir(parents=True)
+    (plugin / "libqxcb.so").write_bytes(b"\x7fELF")
+    (app / "GLIBC-MIN").write_text("2.38\n")
+    write_manifest(app)
+    bin_dir = tmp_path / "fakebin"
+    bin_dir.mkdir()
+    (bin_dir / "ldd").write_text(
+        "#!/bin/sh\nprintf '\\tlibc.so.6 => /lib/libc.so.6 (0x1)\\n\\tlibxcb-cursor.so.0 => not found\\n"
+        "\\tlibxkbcommon-x11.so.0 => not found\\n'\n"
+    )
+    (bin_dir / "getconf").write_text("#!/bin/sh\necho 'glibc 2.31'\n")
+    for tool in bin_dir.iterdir():
+        tool.chmod(0o755)
+    result = _run_env(
+        release / "install.sh", home, {"PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"}, "--no-selftest"
+    )
+    assert result.returncode == 0, result.stderr
+    assert "WARNING" in result.stderr
+    assert "libxcb-cursor0" in result.stderr and "libxkbcommon-x11-0" in result.stderr
+    assert "glibc 2.31" in result.stderr and "2.38" in result.stderr
+    assert (home / ".local" / "opt" / "rvs-studio" / "rvs").is_file()
+    (bin_dir / "getconf").write_text("#!/bin/sh\necho 'glibc 2.39'\n")
+    (bin_dir / "ldd").write_text("#!/bin/sh\nprintf '\\tlibc.so.6 => /lib/libc.so.6 (0x1)\\n'\n")
+    quiet = _run_env(
+        release / "install.sh", home, {"PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"}, "--no-selftest"
+    )
+    assert quiet.returncode == 0 and "WARNING" not in quiet.stderr
+
+
+def test_menu_entry_has_an_icon_line_only_when_the_bundle_has_an_icon(tmp_path: Path):
+    release, home = _release(tmp_path), tmp_path / "home"
+    home.mkdir()
+    desktop = home / ".local" / "share" / "applications" / "rvs-studio.desktop"
+    assert _run(release / "install.sh", home, "--no-selftest").returncode == 0
+    assert "Icon=" not in desktop.read_text()
+    (release / "rvs-studio" / "rvs-studio.png").write_bytes(b"\x89PNG")
+    write_manifest(release / "rvs-studio")
+    assert _run(release / "install.sh", home, "--no-selftest").returncode == 0
+    prefix = home / ".local" / "opt" / "rvs-studio"
+    assert f"Icon={prefix}/rvs-studio.png" in desktop.read_text()
+
+
+def test_windows_installer_uses_fresh_staging_folders_and_deletes_only_what_it_created():
+    text = (ROOT / "packaging" / "install-windows.ps1").read_text()
+    assert "NewGuid" in text and "-ErrorAction Stop" in text  # a fresh name, and creation fails if it exists
+    assert 'Join-Path $parent "$leaf.$token.new"' in text
+    assert "Remove-Item -LiteralPath $staging -Recurse -Force }\n" not in text.split("# 2.")[1].split("try {")[0]
+    assert "$movedOld" in text  # the previous installation is put back when the swap fails
+
+
+def test_release_script_is_deterministic_clean_and_refuses_to_run_elsewhere(tmp_path: Path):
+    text = (ROOT / "scripts" / "build_release.sh").read_text()
+    for needle in (
+        "PYTHONHASHSEED=0", "SOURCE_DATE_EPOCH", "--sort=name", "--owner=0", "--group=0", "--numeric-owner",
+        "gzip -n", "rm -rf build", "rvs_runtime_venv", "THIRD-PARTY-LICENSES.txt", "sbom.cdx.json", "GLIBC-MIN",
+        "--output-reproducible", "selftest --manifest", "QT_QPA_PLATFORM=offscreen",
+    ):  # fmt: skip
+        assert needle in text, needle
+    assert "$RVS_SIGN_CMD " not in text.replace('"$RVS_SIGN_CMD \\"', "")  # never expanded unquoted
+    assert text.index("RVS_SIGN_CMD") < text.index("make_manifest.py")
+    assert text.index('THIRD-PARTY-LICENSES.txt" "$out') < text.index(
+        "make_manifest.py"
+    )  # licences are in the manifest
+    stray = tmp_path / "elsewhere" / "scripts"
+    stray.mkdir(parents=True)
+    for name in ("build_release.sh", "_common.sh"):
+        shutil.copy(ROOT / "scripts" / name, stray / name)
+    result = subprocess.run(
+        ["sh", str(stray / "build_release.sh")], capture_output=True, text=True, check=False, cwd=tmp_path
+    )  # noqa: S603, S607
+    assert result.returncode == 1 and "belongs to the rvs project folder" in result.stderr
+    assert not (tmp_path / "elsewhere" / "build").exists() and not (tmp_path / "elsewhere" / "dist").exists()
+
+
+def test_spec_prunes_unused_qt_parts_and_unused_network_modules():
+    spec = (ROOT / "packaging" / "rvs.spec").read_text()
+    for needle in (
+        "translations", "libqeglfs", "libqwayland", "libqvnc", "libQt6Pdf", "http.server", "socketserver", "xmlrpc",
+        "libQt6Network",
+    ):  # fmt: skip
+        assert needle in spec, needle
+    for keep in ("libqxcb", "libqoffscreen"):
+        assert keep not in spec.split("_UNUSED_QT")[1].split("def _is_unused_qt")[0], keep  # the back ends in use stay
+
+
+def test_licence_report_names_the_excluded_packages_and_the_relinking_rule(tmp_path: Path):
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("make_licences", ROOT / "scripts" / "make_licences.py")
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    rvs_spec = (ROOT / "packaging" / "rvs.spec").read_text().replace("charset_normalizer", "charset-normalizer")
+    for name in module.NETWORK_EXCLUDED:
+        assert name.replace("-", "_") in rvs_spec.replace("-", "_"), (
+            f"{name} is excluded in the report but not in rvs.spec"
+        )
+    out = tmp_path / "licences.txt"
+    assert module.main([str(out), "--bundle", "--json", str(tmp_path / "licences.json")]) == 0
+    text = out.read_text()
+    assert "LGPL" in text and "Relinking" in text and "one-folder bundle" in text
+    assert "Doorstop" in text or "doorstop" in text
+    listed = {p["name"].lower() for p in __import__("json").loads((tmp_path / "licences.json").read_text())}
+    assert not listed & {"requests", "urllib3", "bottle", "pip", "setuptools"}
+
+
+def test_sdist_contains_what_is_needed_to_run_the_tests(tmp_path: Path):
+    setuptools = pytest.importorskip("setuptools")
+    if int(setuptools.__version__.split(".")[0]) < 77:
+        pytest.skip("setuptools 77 or newer is needed for the licence expression")
+    src = tmp_path / "src"
+    shutil.copytree(
+        ROOT, src,
+        ignore=shutil.ignore_patterns(
+            "build", "dist", "wheelhouse", ".git", ".venv*", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache",
+            ".hypothesis", ".rvs-cache", "*.egg-info", ".coverage", "htmlcov",
+        ),
+    )  # fmt: skip
+    out = tmp_path / "out"
+    script = "import setuptools.build_meta as b, sys; print(b.build_sdist(sys.argv[1]))"
+    done = subprocess.run(
+        [sys.executable, "-c", script, str(out)], cwd=src, capture_output=True, text=True, check=False
+    )  # noqa: S603
+    assert done.returncode == 0, done.stderr[-2000:]
+    import tarfile
+
+    with tarfile.open(out / done.stdout.strip().splitlines()[-1]) as tar:
+        names = {n.split("/", 1)[1] for n in tar.getnames() if "/" in n}
+    for needed in (
+        "LICENSE", "README.md", "MANIFEST.in", "pyproject.toml", "tests/conftest.py", "tests/golden_support.py",
+        "tests/golden/minimal10/vcm.csv", "examples/minimal10/rvs-project.yaml", "scripts/build_release.sh",
+        "scripts/_common.sh", "packaging/rvs.spec", "docs/RELEASE.md", "src/rvs_core/guide/guide.html",
+    ):  # fmt: skip
+        assert needed in names, needed
+    assert not [n for n in names if ".rvs-cache" in n or "__pycache__" in n or ".hypothesis" in n]
+    assert not (src / "build").exists()  # building the sdist left no build folder in the copy either
+    assert not (ROOT / "build" / "lib").exists()
+
+
+def test_project_metadata_is_a_proprietary_spdx_licence_with_a_licence_file():
+    import tomllib
+
+    data = tomllib.loads((ROOT / "pyproject.toml").read_text())
+    assert data["project"]["license"] == "LicenseRef-Proprietary"
+    assert data["project"]["license-files"] == ["LICENSE"]
+    requires = data["build-system"]["requires"]
+    assert any(
+        r.replace(" ", "").startswith("setuptools>=") and int(r.split(">=")[1].split(".")[0]) >= 77 for r in requires
+    )
+    assert (ROOT / "LICENSE").is_file() and (ROOT / "README.md").is_file() and (ROOT / "MANIFEST.in").is_file()
+    ignore = (ROOT / ".gitignore").read_text().split()
+    for entry in (".venv/", "venv/", ".coverage", "htmlcov/", ".vscode/", ".idea/", "build/", "dist/"):
+        assert entry in ignore, entry
+
+
+def test_scripts_work_in_temporary_folders_and_the_lock_script_never_invents_hashes():
+    for name in ("sbom.sh", "build_wheelhouse.sh", "build_release.sh"):
+        text = (ROOT / "scripts" / name).read_text()
+        assert "_common.sh" in text and "rvs_enter_project" in text, name
+        assert subprocess.run(["sh", "-n", str(ROOT / "scripts" / name)], check=False).returncode == 0  # noqa: S603, S607
+    lock = (ROOT / "scripts" / "make_lock.sh").read_text()
+    assert "--generate-hashes" in lock and "network" in lock.lower() and "sha256:" not in lock
+    assert subprocess.run(["sh", "-n", str(ROOT / "scripts" / "make_lock.sh")], check=False).returncode == 0  # noqa: S603, S607
+
+
+def test_ci_workflow_runs_three_pythons_and_starts_the_gui_offscreen():
+    import yaml
+
+    workflow = yaml.safe_load((ROOT.parent / ".github" / "workflows" / "rvs-ci.yml").read_text())
+    assert workflow["jobs"]["test"]["strategy"]["matrix"]["python"] == ["3.11", "3.12", "3.13"]
+    steps = " ".join(str(s.get("run", "")) for s in workflow["jobs"]["test"]["steps"])
+    assert "QT_QPA_PLATFORM" in str(workflow["jobs"]["test"]["env"]) and "rvs_gui" in steps
+    assert "libxcb-cursor0" in steps
+
+
+def test_wheelhouse_script_extracts_the_build_requirement_from_pyproject():
+    script = (ROOT / "scripts" / "build_wheelhouse.sh").read_text()
+    line = next(ln for ln in script.splitlines() if ln.startswith('pip download -d wheelhouse "$(sed'))
+    expression = line.split("sed -n '", 1)[1].split("' pyproject.toml", 1)[0]
+    done = subprocess.run(
+        ["sed", "-n", expression, "pyproject.toml"], cwd=ROOT, capture_output=True, text=True, check=False
+    )  # noqa: S603, S607
+    assert done.stdout.strip().startswith("setuptools>=")

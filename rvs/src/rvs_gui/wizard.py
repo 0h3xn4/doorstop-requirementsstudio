@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QListWidget,
     QListWidgetItem,
+    QMessageBox,
     QPlainTextEdit,
     QScrollArea,
     QVBoxLayout,
@@ -28,7 +29,7 @@ from rvs_core.findings import Finding
 from rvs_core.rules.draft import check_draft
 from rvs_gui import fields
 from rvs_gui.session import ProjectSession
-from rvs_gui.widgets import AcronymHighlighter
+from rvs_gui.widgets import AcronymHighlighter, keyboard_text, keyboard_view, named
 
 _HIDDEN = {"rvs_schema_version"}
 _LIVE_DEBOUNCE_ABOVE = 1000  # items; larger projects re-check after a short pause instead of on every key
@@ -61,6 +62,7 @@ class _Page(QWizardPage):
         self.wiz = wizard
         self.setTitle(title)
         self.setSubTitle(subtitle)
+        self.setAccessibleName(title)
 
 
 class WherePage(_Page):
@@ -97,7 +99,10 @@ class NewRequirementWizard(QWizard):
         self.setWindowTitle("New requirement")
         self.setWizardStyle(QWizard.WizardStyle.ModernStyle)
         self.setOption(QWizard.WizardOption.NoBackButtonOnStartPage, True)
-        self.resize(760, 640)
+        self.setButtonText(QWizard.WizardButton.FinishButton, "Create requirement")
+        self.setMinimumSize(640, 460)
+        self.resize(760, 560)  # fits a 768-pixel-high screen; long pages scroll instead of growing the window
+        self._touched = False  # anything entered yet? (Cancel then asks before throwing it away)
         self._defs: list[AttributeDef] = []
         self.fields: dict[str, QWidget] = {}
         self._timer = QTimer(self)
@@ -106,23 +111,27 @@ class NewRequirementWizard(QWizard):
         self._timer.timeout.connect(self._update_findings)
 
         # Where ---------------------------------------------------------------------------------------------
-        self.document = QComboBox()
+        self.document = named(QComboBox(), "Document")
         self.document.addItems(self.documents())
         if document and document in self.documents():
             self.document.setCurrentText(document)
         self.parent_help = QLabel()
         self.parent_help.setWordWrap(True)
-        self.parents_list = QListWidget()
-        where = WherePage(self, "Where does it belong?", "Choose the document, then the requirements it derives from.")
+        self.parents_list = named(keyboard_view(QListWidget()), "Parent requirements")
+        where = WherePage(
+            self, "Step 1 of 5: Where does it belong?", "Choose the document, then the requirements it derives from."
+        )
         lay = QVBoxLayout(where)
-        lay.addWidget(QLabel("Document"))
+        document_label = QLabel("Document")
+        document_label.setBuddy(self.document)
+        lay.addWidget(document_label)
         lay.addWidget(self.document)
         lay.addWidget(self.parent_help)
         lay.addWidget(self.parents_list, 1)
         self._preset_parents = list(parents)
 
         # Statement ----------------------------------------------------------------------------------------
-        self.statement = QPlainTextEdit()
+        self.statement = named(keyboard_text(QPlainTextEdit()), "Requirement statement")
         self.statement.setPlaceholderText(NEW_STATEMENT_HINT)
         self.statement.setMinimumHeight(110)
         cfg = session.cfg
@@ -131,11 +140,11 @@ class NewRequirementWizard(QWizard):
         self.highlighter.configure(
             set(cfg.glossary.acronyms), int(params.get("min_length", 2)), set(params.get("ignore", []))
         )
-        self.live_findings = QPlainTextEdit()
+        self.live_findings = named(keyboard_text(QPlainTextEdit()), "Quality hints")
         self.live_findings.setReadOnly(True)
         self.live_findings.setPlaceholderText("Quality hints appear here as you type.")
         statement_page = StatementPage(
-            self, "What must it say?", "One requirement, one 'shall'. Write it so that it can be verified."
+            self, "Step 2 of 5: What must it say?", "One requirement, one 'shall'. Write it so that it can be verified."
         )
         lay = QVBoxLayout(statement_page)
         lay.addWidget(QLabel(f"Pattern: {NEW_STATEMENT_HINT}"))
@@ -152,22 +161,24 @@ class NewRequirementWizard(QWizard):
         scroll.setWidgetResizable(True)
         scroll.setWidget(holder)
         scroll.setFrameShape(QScrollArea.Shape.NoFrame)
-        details = DetailsPage(self, "Details", "Fill in what you know. Fields marked * are required.")
+        details = DetailsPage(self, "Step 3 of 5: Details", "Fill in what you know. Fields marked * are required.")
         lay = QVBoxLayout(details)
         lay.addWidget(scroll)
 
         # Verification -------------------------------------------------------------------------------------
         self.verify_check = QCheckBox("Also create a planned verification item for this requirement")
-        self.verify_document = QComboBox()
+        self.verify_document = named(QComboBox(), "Verification document")
         self.verify_document.addItems(session.documents_of_kind("verification"))
-        verification = _Page(self, "How will you show it is met?", "A requirement without verification is a gap.")
-        lay = QVBoxLayout(verification)
-        lay.addWidget(
-            QLabel(
-                "The verification method and level come from the Details page. A planned verification item "
-                "links to this requirement so it appears in the verification matrix."
-            )
+        verification = _Page(
+            self, "Step 4 of 5: How will you show it is met?", "A requirement without verification is a gap."
         )
+        lay = QVBoxLayout(verification)
+        explanation = QLabel(
+            "The verification method and level come from the Details page. A planned verification item "
+            "links to this requirement so it appears in the verification matrix."
+        )
+        explanation.setWordWrap(True)  # an unwrapped sentence made the whole wizard 975 pixels wide
+        lay.addWidget(explanation)
         lay.addWidget(self.verify_check)
         lay.addWidget(self.verify_document)
         lay.addStretch(1)
@@ -178,9 +189,11 @@ class NewRequirementWizard(QWizard):
             self.verify_check.setToolTip("This project has no verification document.")
 
         # Review -------------------------------------------------------------------------------------------
-        self.review = QPlainTextEdit()
+        self.review = named(keyboard_text(QPlainTextEdit()), "Review")
         self.review.setReadOnly(True)
-        review_page = _Page(self, "Review", "Check what will be created. You can go back to change anything.")
+        review_page = _Page(
+            self, "Step 5 of 5: Review", "Check what will be created. You can go back to change anything."
+        )
         lay = QVBoxLayout(review_page)
         lay.addWidget(self.review)
 
@@ -191,10 +204,12 @@ class NewRequirementWizard(QWizard):
         self._build_details()
         self.document.currentTextChanged.connect(self._on_document)
         self.parents_list.itemChanged.connect(lambda _i: where.completeChanged.emit())
+        self.parents_list.itemChanged.connect(lambda _i: self._touch())
         self.statement.textChanged.connect(self._on_statement)
         self.currentIdChanged.connect(self._on_page)
         self.fill_parents()
         self.restart()  # the first page is current (and its Next button correct) before the wizard is shown
+        self._touched = False  # the defaults filled in above are not the user's input
 
     # where ---------------------------------------------------------------------------------------------------
     def documents(self) -> list[str]:
@@ -291,11 +306,11 @@ class NewRequirementWizard(QWizard):
                 self.details_form.addRow("", fields.help_label(tip))
             value = previous.get(adef.name) or defaults.get(adef.name)
             if value not in (None, ""):
-                fields.set_value(widget, value)
+                fields.set_value(widget, value, adef.type)
         fields.refresh_completions(self.session, self._defs, self.fields)
 
     def field_set(self, name: str, value: Any) -> None:
-        fields.set_value(self.fields[name], value)
+        fields.set_value(self.fields[name], value, next((d.type for d in self._defs if d.name == name), ""))
 
     def attrs(self) -> dict[str, Any]:
         out: dict[str, Any] = {}
@@ -315,12 +330,41 @@ class NewRequirementWizard(QWizard):
                 return False
         return True
 
+    def _touch(self) -> None:
+        self._touched = True
+
+    def has_input(self) -> bool:
+        """True when the user has typed or chosen anything that Cancel would throw away."""
+        return self._touched or bool(self.statement.toPlainText().strip()) or bool(self.checked_parents())
+
+    def confirm_cancel(self) -> bool:
+        """Ask whether to throw away what was entered (replaced in tests; the window answers with a message box)."""
+        box = QMessageBox(
+            QMessageBox.Icon.Question,
+            "New requirement",
+            "Discard this new requirement? What you entered will be lost.",
+            QMessageBox.StandardButton.NoButton,
+            self,
+        )
+        discard = box.addButton("Discard", QMessageBox.ButtonRole.DestructiveRole)
+        keep = box.addButton("Keep editing", QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(keep)
+        box.exec()
+        return box.clickedButton() is discard
+
+    def reject(self) -> None:  # Cancel, Esc and the window's close button
+        if self.has_input() and not self.confirm_cancel():
+            return
+        super().reject()
+
     def _on_field(self, *_args: object) -> None:
+        self._touch()
         self._details_page.completeChanged.emit()
         self._schedule()
 
     # live findings ---------------------------------------------------------------------------------------------
     def _on_statement(self) -> None:
+        self._touch()
         self._statement_page.completeChanged.emit()
         self._schedule()
 

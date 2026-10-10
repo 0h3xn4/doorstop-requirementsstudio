@@ -31,7 +31,7 @@ def _insert_before_section_properties(self, element):  # type: ignore[no-untyped
 
 
 CT_Body._insert_p = _insert_before_section_properties
-CT_Body._insert_tbl = _insert_before_section_properties
+CT_Body._insert_tbl = _insert_before_section_properties  # type: ignore[assignment]
 
 SANS, MONO = "IBM Plex Sans", "IBM Plex Mono"
 _GAP_FILL = {"unverified-approved": "FFD7D9", "orphan": "FFD7D9", "unverified": "FCF4D6", "childless": "FCF4D6"}

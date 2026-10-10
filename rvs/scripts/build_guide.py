@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 GUIDE_DIR = ROOT / "docs" / "guide"
 OUTPUT = ROOT / "src" / "rvs_core" / "guide" / "guide.html"
 SHORTCUTS_MARKER = "<!-- shortcuts-table -->"
+SHORTCUT_IDS_MARKER = "<!-- shortcut-ids-table -->"
 
 # Layout only: colours come from the viewer so the guide follows the light or dark theme.
 CSS = """
@@ -39,6 +40,15 @@ def shortcuts_table() -> str:
     return "\n".join(rows)
 
 
+def shortcut_ids_table() -> str:
+    """The action IDs that ``"shortcuts"`` in settings.json accepts, with each action's default key."""
+    from rvs_gui.shortcuts import SHORTCUTS
+
+    rows = ["| Action ID | Default key | Action |", "|---|---|---|"]
+    rows += [f"| `{action}` | {key} | {description} |" for action, (key, description) in SHORTCUTS.items()]
+    return "\n".join(rows)
+
+
 def _toc(tokens: list[dict[str, object]], depth: int = 0) -> str:
     items = []
     for t in tokens:
@@ -51,7 +61,7 @@ def _toc(tokens: list[dict[str, object]], depth: int = 0) -> str:
 def build(guide_dir: Path = GUIDE_DIR) -> str:
     sources = sorted(guide_dir.glob("*.md"))
     text = "\n\n".join(p.read_text(encoding="utf-8").strip() for p in sources)
-    text = text.replace(SHORTCUTS_MARKER, shortcuts_table())
+    text = text.replace(SHORTCUTS_MARKER, shortcuts_table()).replace(SHORTCUT_IDS_MARKER, shortcut_ids_table())
     md = markdown.Markdown(
         extensions=["tables", "fenced_code", "toc", "sane_lists"], extension_configs={"toc": {"toc_depth": "1-2"}}
     )
@@ -67,7 +77,18 @@ def build(guide_dir: Path = GUIDE_DIR) -> str:
     )
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    args = sys.argv[1:] if argv is None else argv
+    if args == ["--check"]:  # used by the release build: the committed guide must be what the sources build
+        current = OUTPUT.read_text(encoding="utf-8") if OUTPUT.is_file() else None
+        if current != build():
+            print(f"{OUTPUT} is out of date: run python scripts/build_guide.py and commit it.", file=sys.stderr)
+            return 1
+        print(f"{OUTPUT} is current")
+        return 0
+    if args:
+        print("usage: build_guide.py [--check]", file=sys.stderr)
+        return 2
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT.write_text(build(), encoding="utf-8", newline="\n")
     print(f"wrote {OUTPUT}")

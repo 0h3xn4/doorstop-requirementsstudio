@@ -17,7 +17,12 @@ from rvs_core.trace import LinkGraph
 from rvs_core.validate import ValidationReport, validate_project
 
 
+class ProjectBusyError(ValueError):
+    """An edit was attempted while a long operation (creating a baseline) is changing the project files."""
+
+
 class ProjectSession(QObject):
+    busy_changed = Signal(bool)  # a long operation started or ended; edits are refused meanwhile
     loaded = Signal()  # a project was opened or fully refreshed
     item_changed = Signal(str)  # uid of the item that was created or edited (after refresh)
     active_cr_changed = Signal(object)  # change request id or None
@@ -37,6 +42,25 @@ class ProjectSession(QObject):
         self.baseline_label = "working copy"
         self._by_uid: dict[str, ItemData] = {}
         self._findings_by_uid: dict[str, list[Finding]] = {}
+        self.busy_reason = ""
+        self._refresh_pending = False
+
+    # busy flag ################################################################
+    @property
+    def busy(self) -> bool:
+        return bool(self.busy_reason)
+
+    def begin_busy(self, reason: str) -> None:
+        """Refuse edits (and postpone refreshes) until :meth:`end_busy`: a worker thread is writing project files."""
+        self.busy_reason = reason
+        self.busy_changed.emit(True)
+
+    def end_busy(self) -> None:
+        self.busy_reason = ""
+        self.busy_changed.emit(False)
+        if self._refresh_pending:
+            self._refresh_pending = False
+            self.refresh()
 
     # loading ##################################################################
     @staticmethod
@@ -64,12 +88,25 @@ class ProjectSession(QObject):
     def refresh(self) -> None:
         if self.root is None:
             return
+        if self.busy:  # files are being written by a worker: read them when it has finished
+            self._refresh_pending = True
+            return
         self._apply(validate_project(self.root, doorstop=False))
 
+    @staticmethod
+    def full_validation_report(root: Path) -> ValidationReport:
+        """Doorstop's own tree validation as well (re-parses every item: slow on large projects). Touches no session
+        state, so it is safe on a worker thread; hand the result to :meth:`adopt_validation`."""
+        return validate_project(root, doorstop=True)
+
+    def adopt_validation(self, report: ValidationReport) -> None:
+        """Show a report from :meth:`full_validation_report` (GUI thread)."""
+        self._apply(report)
+
     def run_full_validation(self) -> None:
-        """Also run Doorstop's own tree validation (re-parses every item: slow on large projects)."""
+        """Synchronous variant of the above (tests, scripts)."""
         if self.root is not None:
-            self._apply(validate_project(self.root, doorstop=True))
+            self._apply(self.full_validation_report(self.root))
 
     def _apply(self, report: ValidationReport) -> None:
         self.report = report
@@ -121,6 +158,8 @@ class ProjectSession(QObject):
     # edits ####################################################################
     def _service(self) -> EditService:
         assert self.root is not None
+        if self.busy:
+            raise ProjectBusyError(f"Please wait: {self.busy_reason}. Edits are possible again when it has finished.")
         return EditService(self.root, user=self.user, change_request=self.active_cr)
 
     def update_item(

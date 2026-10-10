@@ -19,7 +19,9 @@ excludes = ["tkinter", "doorstop.server", "doorstop.gui", "PySide6.QtNetwork",
             "PySide6.QtWebEngineCore", "PySide6.QtWebEngineWidgets", "PySide6.QtQml",
             "PySide6.QtQuick", "PySide6.QtPdf", "PySide6.QtSvg",
             "requests", "urllib3", "bottle", "plantuml_markdown", "certifi", "idna", "charset_normalizer",
-            "ssl", "_ssl"]  # fmt: skip
+            "ssl", "_ssl",
+            # standard-library network servers and clients nothing imports (the offline guard would refuse them anyway)
+            "http.server", "socketserver", "xmlrpc", "xmlrpc.client", "xmlrpc.server"]  # fmt: skip
 
 gui = Analysis([str(root / "packaging" / "launch.py")], pathex=[str(root / "src")], datas=datas, excludes=excludes)  # noqa: F821
 cli = Analysis([str(root / "packaging" / "launch_cli.py")], pathex=[str(root / "src")], datas=datas, excludes=excludes)  # noqa: F821
@@ -30,9 +32,28 @@ def _is_network(entry):  # entry = (destination, source, type); symbolic links t
     return any(Path(entry[0]).name.startswith(n) or n in Path(entry[0]).name or n in Path(str(entry[1])).name for n in _NETWORK_LIBS)
 
 
+# Qt parts the application never loads (it is a QtWidgets program that runs on X11/xcb, or offscreen in tests and
+# scripts): translations, the other platform back ends (EGLFS, LinuxFB, VNC, Wayland, minimal), PDF and SVG support.
+# Matched against the path inside the bundle, with '/' separators. `rvs selftest --manifest` and an offscreen start
+# of rvs-studio are part of scripts/build_release.sh, so a pruned file that was needed fails the release build.
+_UNUSED_QT = (
+    "PySide6/Qt/translations/",
+    "PySide6/Qt/plugins/platforms/libqeglfs", "PySide6/Qt/plugins/platforms/libqlinuxfb",
+    "PySide6/Qt/plugins/platforms/libqminimal", "PySide6/Qt/plugins/platforms/libqvnc",
+    "PySide6/Qt/plugins/platforms/libqwayland", "PySide6/Qt/plugins/platforms/libqvkkhrdisplay",
+    "PySide6/Qt/plugins/wayland-", "PySide6/Qt/plugins/egldeviceintegrations/",
+    "PySide6/Qt/plugins/iconengines/", "PySide6/Qt/plugins/imageformats/libqsvg", "PySide6/Qt/plugins/imageformats/libqpdf",
+    "libQt6EglFSDeviceIntegration", "libQt6EglFsKmsSupport", "libQt6WaylandClient", "libQt6WaylandEglClientHwIntegration",
+    "libQt6WlShellIntegration", "libQt6Pdf", "libQt6Svg", "libwayland-",
+)  # fmt: skip
+def _is_unused_qt(entry):
+    dest = entry[0].replace("\\", "/")
+    return any(token in dest for token in _UNUSED_QT)
+
+
 for analysis in (gui, cli):
-    analysis.binaries = [b for b in analysis.binaries if not _is_network(b)]
-    analysis.datas = [d for d in analysis.datas if not _is_network(d)]
+    analysis.binaries = [b for b in analysis.binaries if not _is_network(b) and not _is_unused_qt(b)]
+    analysis.datas = [d for d in analysis.datas if not _is_network(d) and not _is_unused_qt(d)]
 gui_pyz, cli_pyz = PYZ(gui.pure), PYZ(cli.pure)  # noqa: F821
 gui_exe = EXE(gui_pyz, gui.scripts, [], exclude_binaries=True, name="rvs-studio", console=False)  # noqa: F821
 cli_exe = EXE(cli_pyz, cli.scripts, [], exclude_binaries=True, name="rvs", console=True)  # noqa: F821

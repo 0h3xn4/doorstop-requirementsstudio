@@ -17,6 +17,7 @@ from PySide6.QtGui import QBrush, QColor
 from rvs_core.adapter import ItemData
 from rvs_core.findings import Finding, Severity
 from rvs_gui.theme import TOKENS
+from rvs_gui.widgets import problem_counts
 
 Index = QModelIndex | QPersistentModelIndex
 SORT_ROLE = Qt.ItemDataRole.UserRole + 1
@@ -45,7 +46,12 @@ COLUMNS = (
 )
 # Cells that expert mode edits in place (they are attributes of the item, not derived values).
 EDITABLE_KEYS = ("title", "type", "status", "priority", "owner", "verify_method", "verify_level")
-_SEVERITY_TOKEN = {Severity.ERROR: "support_error", Severity.WARNING: "support_warning", Severity.INFO: "link"}
+# Severity text uses text tokens (4.5:1 on the surfaces); "support_warning" is a fill colour and is too pale for text.
+_SEVERITY_TOKEN = {Severity.ERROR: "support_error", Severity.WARNING: "warning_text", Severity.INFO: "link"}
+HEADER_TIPS = {
+    "problems": "E = errors, W = warnings. For example '0E 1W' means no errors and one warning.",
+    "text": "The full requirement statement",
+}
 
 
 def severity_color(severity: Severity) -> str:
@@ -115,6 +121,8 @@ class ItemTableModel(QAbstractTableModel):
     def headerData(self, section: int, orientation: Qt.Orientation, role: int = Qt.ItemDataRole.DisplayRole) -> Any:
         if orientation == Qt.Orientation.Horizontal and role == Qt.ItemDataRole.DisplayRole:
             return COLUMNS[section].title
+        if orientation == Qt.Orientation.Horizontal and role == Qt.ItemDataRole.ToolTipRole:
+            return HEADER_TIPS.get(COLUMNS[section].key)
         return None
 
     def _value(self, item: ItemData, key: str) -> str:
@@ -147,6 +155,9 @@ class ItemTableModel(QAbstractTableModel):
             return self._value(item, key)
         if role == Qt.ItemDataRole.ToolTipRole and key in ("text", "title"):
             return item.text
+        if role == Qt.ItemDataRole.ToolTipRole and key == "problems":
+            e, w, _i = self._counts.get(item.uid, (0, 0, 0))
+            return problem_counts(e, w) if e or w else "No problems"
         if role == Qt.ItemDataRole.ForegroundRole and key == "problems":
             e, w, _i = self._counts.get(item.uid, (0, 0, 0))
             if e:

@@ -3,7 +3,7 @@
 import html
 from pathlib import Path
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import QModelIndex, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from rvs_core import atomicio
 from rvs_core.changecontrol.baselines import list_baselines
 from rvs_core.changecontrol.diff import (
     WORKING,
@@ -32,9 +33,10 @@ from rvs_core.matrices import Provenance
 from rvs_core.matrices.render import to_csv
 from rvs_core.matrices.table import MatrixTable
 from rvs_gui.jobs import run_in_background
-from rvs_gui.matrix_views import MatrixTableModel
+from rvs_gui.matrix_views import MatrixTableModel, item_in_row
 from rvs_gui.session import ProjectSession
 from rvs_gui.theme import TOKENS
+from rvs_gui.widgets import keyboard_view, named, secondary
 
 WORKING_LABEL = "Working copy"
 
@@ -63,28 +65,35 @@ class DiffView(QWidget):
     message = Signal(str, str)
     diff_ready = Signal()
     export_done = Signal(str, str)
+    item_requested = Signal(str)  # Enter or double-click on a changed item
 
     def __init__(self, session: ProjectSession) -> None:
         super().__init__()
         self.session = session
+        self.setMinimumSize(480, 200)
         self.diff: DiffResult | None = None
-        self.left, self.right, self.document = QComboBox(), QComboBox(), QComboBox()
+        self.left = named(QComboBox(), "Compare from")
+        self.right = named(QComboBox(), "Compare to")
+        self.document = named(QComboBox(), "Document")
         self.compare_button = QPushButton("Compare")
         self.export_button = QPushButton("Export…")
+        secondary(self.export_button)
         self._generation = 0
         self.summary = QLabel("Choose two versions and press Compare.")
         self.model = MatrixTableModel(self)
-        self.table = QTableView()
+        self.table = named(keyboard_view(QTableView()), "Changed items")
         self.table.setModel(self.model)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.verticalHeader().hide()
         self.table.horizontalHeader().setStretchLastSection(True)
-        self.detail = QTextBrowser()
+        self.detail = named(QTextBrowser(), "Change details")
         self.detail.setOpenLinks(False)
         top = QHBoxLayout()
         for label, widget in (("From", self.left), ("To", self.right), ("Document", self.document)):
-            top.addWidget(QLabel(label))
+            caption = QLabel(label)
+            caption.setBuddy(widget)
+            top.addWidget(caption)
             top.addWidget(widget)
         top.addWidget(self.compare_button)
         top.addWidget(self.export_button)
@@ -97,11 +106,19 @@ class DiffView(QWidget):
         lay.addLayout(top)
         lay.addWidget(self.summary)
         lay.addWidget(split, 1)
+        self.table.activated.connect(self._on_activated)
         self.compare_button.clicked.connect(self.compare)
         self.export_button.clicked.connect(self._choose_export)
         self.document.currentTextChanged.connect(lambda _t: self._show_table())
         self.table.selectionModel().currentRowChanged.connect(lambda *_a: self._show_detail())
         session.loaded.connect(self.refresh_choices)
+
+    def _on_activated(self, index: QModelIndex) -> None:
+        uid = item_in_row(
+            self.model, index.row(), 0, lambda u: self.diff is not None and self.diff.for_item(u) is not None
+        )
+        if uid:
+            self.item_requested.emit(uid)
 
     # choices ###################################################################
     def refresh_choices(self) -> None:
@@ -256,7 +273,7 @@ class DiffView(QWidget):
                 if fmt == "csv"
                 else render_doc(diff_doc(shown, prov), fmt)
             )
-            path.write_bytes(data)
+            atomicio.write_bytes(path, data)
             return len(shown.changes)
 
         def done(count: int) -> None:

@@ -5,6 +5,7 @@ from PySide6.QtGui import QKeySequence, QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import QDialog, QDialogButtonBox, QTableView, QVBoxLayout, QWidget
 
 from rvs_core import userconfig
+from rvs_gui.widgets import keyboard_view, named
 
 SHORTCUTS: dict[str, tuple[str, str]] = {
     "open_project": ("Ctrl+O", "Open a project folder"),
@@ -21,6 +22,7 @@ SHORTCUTS: dict[str, tuple[str, str]] = {
     "next_problem": ("F8", "Jump to the next problem"),
     "prev_problem": ("Shift+F8", "Jump to the previous problem"),
     "focus_problems": ("F6", "Move the focus to the Problems panel"),
+    "focus_editor": ("F4", "Move the focus to the requirement editor (Enter on an item row does the same)"),
     "refresh": ("F5", "Reload and re-check the project"),
     "full_validation": ("Ctrl+Shift+V", "Run Doorstop's full validation"),
     "new_baseline": ("Ctrl+Shift+B", "Create a baseline"),
@@ -75,7 +77,7 @@ class ShortcutsDialog(QDialog):
             for item in row:
                 item.setEditable(False)
             model.appendRow(row)
-        self.table = QTableView()
+        self.table = named(keyboard_view(QTableView()), "Keyboard shortcuts")
         self.table.setModel(model)
         self.table.verticalHeader().hide()
         self.table.horizontalHeader().setStretchLastSection(True)

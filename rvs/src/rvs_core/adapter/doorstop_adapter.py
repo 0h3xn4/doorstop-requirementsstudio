@@ -35,6 +35,9 @@ _settings.REVIEW_NEW_ITEMS = False
 # Doorstop would otherwise run `git add/rm` through a subprocess on every save when the project is in a Git
 # repository: it needs a `git` executable, and it uses the process's working directory, not the project's repository.
 _settings.ADDREMOVE_FILES = False
+# Project files are LF on every system (Doorstop defaults to the OS line ending: CRLF on Windows would make every item
+# differ from the same project made on Linux, and from the committed examples).
+_settings.WRITE_LINESEPERATOR = "\n"
 
 # Doorstop parses every item with PyYAML's pure-Python SafeLoader; libyaml's C parser reads the same documents about
 # three times faster (cold open of 5,000 items: 6.6 s -> 2.0 s, DEVIATIONS V14). Same data model; tests compare both

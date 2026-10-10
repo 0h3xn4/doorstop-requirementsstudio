@@ -72,6 +72,7 @@ def test_B06_a_snapshot_path_that_leaves_the_folder_is_refused(git_project: Path
     assert not (git_project.parent / "escape.txt").exists()
 
 
+@pytest.mark.skipif(os.name == "nt", reason="symbolic links need a privilege on Windows")
 def test_B07_a_symlinked_snapshot_cache_is_refused(git_project: Path, tmp_path: Path):
     create_baseline(git_project, "S2", "x", user="a")
     cache = git_project / ".rvs-cache"

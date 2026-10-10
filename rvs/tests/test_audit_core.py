@@ -272,6 +272,7 @@ def test_an_alias_bomb_in_an_item_is_refused_quickly(minimal_project: Path):
     assert time.monotonic() - started < 10
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX permissions and symbolic links")
 def test_saving_an_item_keeps_permissions_and_symlinks(minimal_project: Path):
     path = minimal_project / "SYS" / "SYS-0001.yml"
     path.chmod(0o660)
@@ -535,3 +536,13 @@ def test_export_format_follows_the_output_file_name(minimal_project: Path, tmp_p
     assert cli.main(["export", str(minimal_project), "--spec", "-o", str(spec)]) == 0
     assert spec.read_bytes()[:2] == b"PK"
     assert cli.main(["export", str(minimal_project), "--spec", "-o", str(tmp_path / "s.html")]) == 0
+
+
+def test_project_files_are_written_with_unix_line_endings_on_every_system():
+    """Doorstop defaults to the operating system's line ending (CRLF on Windows), which made item files differ between
+    systems and from the committed examples; the adapter pins it."""
+    from doorstop import settings
+
+    import rvs_core.adapter  # noqa: F401 - applies the settings
+
+    assert settings.WRITE_LINESEPERATOR == "\n"

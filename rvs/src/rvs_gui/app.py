@@ -319,7 +319,9 @@ class MainWindow(QMainWindow):
         mode_menu = view_menu.addMenu("Mode")
         group = QActionGroup(self)
         group.setExclusive(True)
-        self.action_mode_guided = QAction("Guided: wizard, help under every field", self, checkable=True)
+        self.action_mode_guided = QAction(
+            "Guided: wizard and a help line for the field you are in", self, checkable=True
+        )
         self.action_mode_expert = QAction("Expert: dense table, edit in place", self, checkable=True)
         for mode, act in (("guided", self.action_mode_guided), ("expert", self.action_mode_expert)):
             act.triggered.connect(lambda _c=False, m=mode: self.set_mode(m))

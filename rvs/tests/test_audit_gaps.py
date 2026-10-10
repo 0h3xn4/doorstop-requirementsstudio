@@ -177,16 +177,15 @@ def test_R07_V11_V18_inactive_items_are_ignored_by_rules_matrices_and_coverage(m
 
 
 def test_V16_derived_items_are_not_orphans(minimal_project: Path):
-    cfg, items, graph = _ctx(minimal_project)
-    child = next(i for i in items if i.document == "SYS" and i.normative and not i.links)
-    items2 = [replace(i, derived=True) if i.uid == child.uid else i for i in items]
-    t = (
-        build_traceability(cfg, items2, LinkGraph.build(cfg, items2), "SYS", "MIS", "up", provenance=PROV)
-        if any(d.prefix == "MIS" for d in cfg.project.documents)
-        else build_traceability(cfg, items2, LinkGraph.build(cfg, items2), "EPS", "SYS", "up", provenance=PROV)
-    )
-    flagged = {r[0]: f for r, f in zip(t.rows, t.flags, strict=True)}
-    assert flagged.get(child.uid) != "orphan"
+    cfg, items, _ = _ctx(minimal_project)
+    child = next(i for i in items if i.document == "EPS" and i.normative)
+
+    def flag(derived: bool) -> str | None:
+        changed = [replace(i, derived=derived, links=(), link_stamps={}) if i.uid == child.uid else i for i in items]
+        t = build_traceability(cfg, changed, LinkGraph.build(cfg, changed), "EPS", "SYS", "up", provenance=PROV)
+        return {r[0]: f for r, f in zip(t.rows, t.flags, strict=True)}[child.uid]
+
+    assert flag(False) == "orphan" and flag(True) is None
 
 
 def test_V04_V05_V23_required_and_typed_attributes_are_checked(minimal_project: Path):
@@ -270,19 +269,26 @@ def test_I09_every_reason_is_checked_before_the_first_write(git_project: Path):
     from rvs_core.authoring import ReasonRequiredError
     from rvs_core.exporters.itemsio import apply_import, plan_import
 
-    create_baseline(git_project, "I1", "x", user="a")
+    fresh = EditService(git_project, user="a").create_item(
+        "SYS", "The spacecraft shall be fresh.", attrs={"title": "Fresh"}
+    )
+    create_baseline(
+        git_project, "I1", "x", user="a"
+    )  # SYS-0001 is in the baseline; the new item is not... made afterwards
+    other = EditService(git_project, user="a").create_item(
+        "SYS", "The spacecraft shall be newer.", attrs={"title": "Newer"}
+    )
     cfg, items, _ = _ctx(git_project)
     rows = [
-        {"id": "SYS-0001", "document": "SYS", "text": "The spacecraft shall change one.", "_row": "2"},
-        {"id": "SYS-0002", "document": "SYS", "text": "The spacecraft shall change two.", "_row": "3"},
+        {"id": other.uid, "document": "SYS", "text": "The spacecraft shall be changed first.", "_row": "2"},
+        {"id": "SYS-0001", "document": "SYS", "text": "The spacecraft shall be changed second.", "_row": "3"},
     ]
-    plan = plan_import(
-        cfg, items, rows
-    )  # planned without the baseline knowledge, so the reason check happens at apply time
-    before = (git_project / "SYS" / "SYS-0001.yml").read_bytes()
+    plan = plan_import(cfg, items, rows)  # planned without the baseline knowledge: the check happens when applying
+    before = (git_project / other.path).read_bytes()
     with pytest.raises(ReasonRequiredError):
         apply_import(git_project, plan, user="a", why="")
-    assert (git_project / "SYS" / "SYS-0001.yml").read_bytes() == before
+    assert (git_project / other.path).read_bytes() == before  # the first row was not written before the second failed
+    assert fresh.uid
 
 
 def test_I21_S16_spreadsheet_limits(monkeypatch):  # type: ignore[no-untyped-def]
@@ -340,6 +346,15 @@ def test_S20_a_crash_report_hides_folder_names(tmp_path: Path):
     except RuntimeError as exc:
         text = crash_report(type(exc), exc, exc.__traceback__)
     assert "secret-customer-project" not in text and "mod.py" in text
+    own = compile("def f():\n    raise RuntimeError('x')\n", "/opt/app/src/rvs_core/example.py", "exec")
+    ns: dict[str, Any] = {}
+    exec(own, ns)  # noqa: S102
+    try:
+        ns["f"]()
+    except RuntimeError as exc:
+        assert "rvs_core/example.py" in crash_report(
+            type(exc), exc, exc.__traceback__
+        )  # the program's own frames are kept
 
 
 def test_G06_commit_identities_cannot_inject_headers(git_project: Path):
@@ -362,8 +377,8 @@ def test_O14_O15_cache_version_and_doorstop_skip_marker(minimal_project: Path):
 
     raw = json.loads((folder / "SYS.json").read_text())
     raw.pop("sig")
-    raw["v"] = cachemod.CACHE_VERSION - 1
-    raw["items"] = {}
+    assert raw["items"]
+    raw["v"] = cachemod.CACHE_VERSION - 1  # same content, signed, but written by another version of the program
     cache = cachemod.ItemCache(minimal_project)
     (folder / "SYS.json").write_text(
         json.dumps({**raw, "sig": cachemod.sign(json.dumps(raw, sort_keys=True, ensure_ascii=False))})
@@ -380,6 +395,7 @@ def test_L03_L05_L06_import_and_export_argument_checks(minimal_project: Path, tm
     note = tmp_path / "items.txt"
     note.write_text("id,text\n")
     assert cli.main(["import", str(minimal_project), str(note)]) == 2
+    assert ".csv, .xlsx" in capsys.readouterr().err
     bad = tmp_path / "bad.csv"
     bad.write_text("id,document,text\nSYS-0001,SYS,Changed text shall hold.\nNOPE-1,NOPE,x\n")
     assert cli.main(["import", str(minimal_project), str(bad), "--dry-run"]) == 1

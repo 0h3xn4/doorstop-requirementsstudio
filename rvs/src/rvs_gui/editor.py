@@ -295,7 +295,7 @@ class RequirementEditor(QWidget):
         return self._help_visible
 
     def set_help_visible(self, visible: bool) -> None:
-        """Guided mode shows a line of help under every field; expert mode keeps the tooltips only."""
+        """Guided mode shows one help line, for the field that has the focus; expert mode keeps the tooltips only."""
         self._help_visible = visible
         self.help_line.setVisible(visible)
 

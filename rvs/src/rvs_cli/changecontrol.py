@@ -27,7 +27,7 @@ def add_parsers(sub: "argparse._SubParsersAction[argparse.ArgumentParser]") -> N
     base = sub.add_parser("baseline", help="named, immutable snapshots of the project (Git tags)")
     bsub = base.add_subparsers(dest="baseline_command", required=True)
     create = bsub.add_parser("create", help="create a baseline (commits the project and tags it)")
-    create.add_argument("project", type=Path)
+    create.add_argument("project", type=Path, help="the project folder (it contains rvs-project.yaml)")
     create.add_argument("name")
     create.add_argument("-m", "--message", required=True, help="why this baseline exists")
     create.add_argument("--defer", action="append", default=[], metavar="CR-ID=REASON",
@@ -37,23 +37,23 @@ def add_parsers(sub: "argparse._SubParsersAction[argparse.ArgumentParser]") -> N
     )
     create.add_argument("--user")
     lst = bsub.add_parser("list", help="list the baselines")
-    lst.add_argument("project", type=Path)
+    lst.add_argument("project", type=Path, help="the project folder (it contains rvs-project.yaml)")
     lst.add_argument("--format", choices=("text", "json"), default="text")
     ver = bsub.add_parser("verify", help="check that a baseline has not been tampered with")
-    ver.add_argument("project", type=Path)
+    ver.add_argument("project", type=Path, help="the project folder (it contains rvs-project.yaml)")
     ver.add_argument("name")
 
     cr = sub.add_parser("cr", help="change requests")
     csub = cr.add_subparsers(dest="cr_command", required=True)
     new = csub.add_parser("new", help="raise a change request")
-    new.add_argument("project", type=Path)
+    new.add_argument("project", type=Path, help="the project folder (it contains rvs-project.yaml)")
     new.add_argument("title")
     new.add_argument("-d", "--description", default="")
     new.add_argument("--item", action="append", default=[], help="affected item (repeatable)")
     new.add_argument("--user")
     for name in ("list", "show", "status", "defer"):
         sp = csub.add_parser(name)
-        sp.add_argument("project", type=Path)
+        sp.add_argument("project", type=Path, help="the project folder (it contains rvs-project.yaml)")
         if name != "list":
             sp.add_argument("id")
         if name == "status":
@@ -67,7 +67,7 @@ def add_parsers(sub: "argparse._SubParsersAction[argparse.ArgumentParser]") -> N
     diff = sub.add_parser(
         "diff", help="differences between two baselines, or a baseline and the working copy ('working')"
     )
-    diff.add_argument("project", type=Path)
+    diff.add_argument("project", type=Path, help="the project folder (it contains rvs-project.yaml)")
     diff.add_argument("left")
     diff.add_argument("right")
     diff.add_argument("--document", help="only this document")

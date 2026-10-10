@@ -32,18 +32,23 @@ from rvs_core.vcs.git import GitError
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="rvs", description="Requirements & Verification Studio")
+    parser = argparse.ArgumentParser(
+        prog="rvs",
+        description="Requirements & Verification Studio",
+        epilog="Exit codes: 0 ok, 1 findings or an unexpected error (RVS_DEBUG=1 shows the traceback), "
+        "2 a request that cannot be carried out (message on stderr), 3 the project cannot be loaded, 130 interrupted.",
+    )
     parser.add_argument("--version", action="store_true", help="print tool and framework versions")
     sub = parser.add_subparsers(dest="command")
 
     val = sub.add_parser("validate", help="validate a project folder (exit 0 ok, 1 errors, 3 project cannot be loaded)")
-    val.add_argument("project", type=Path)
-    val.add_argument("--format", choices=("text", "json"), default="text")
+    val.add_argument("project", type=Path, help="the project folder (it contains rvs-project.yaml)")
+    val.add_argument("--format", choices=("text", "json"), default="text", help="how to print the findings")
     val.add_argument("--strict", action="store_true", help="treat warnings as errors")
     val.add_argument("--fast", action="store_true", help="skip Doorstop's own tree validation (RVS checks still run)")
 
-    exp = sub.add_parser("export", help="write a matrix or report (CSV, JSON, XLSX, HTML, DOCX or PDF)")
-    exp.add_argument("project", type=Path)
+    exp = sub.add_parser("export", help="write a matrix or report (CSV, JSON, XLSX, HTML, DOCX, PDF or ReqIF)")
+    exp.add_argument("project", type=Path, help="the project folder (it contains rvs-project.yaml)")
     what = exp.add_mutually_exclusive_group(required=True)
     what.add_argument("--vcm", action="store_true", help="verification control matrix")
     what.add_argument("--trace", metavar="SRC:DST[:up|down]", help="traceability matrix between two documents")
@@ -73,7 +78,7 @@ def build_parser() -> argparse.ArgumentParser:
     changecontrol.add_parsers(sub)
 
     init = sub.add_parser("init", help="create a new project from a template")
-    init.add_argument("project", type=Path, nargs="?")
+    init.add_argument("project", type=Path, nargs="?", help="the folder to create (must be empty or new)")
     init.add_argument("--name", help="project name")
     init.add_argument("--template", default="minimal")
     init.add_argument("--git", action="store_true", help="also create a Git repository in the folder")
@@ -91,7 +96,7 @@ def build_parser() -> argparse.ArgumentParser:
         "import",
         help="import items from a CSV or XLSX file written by 'export --items', or from a ReqIF file (exit 0 ok, 1 errors)",
     )
-    imp.add_argument("project", type=Path)
+    imp.add_argument("project", type=Path, help="the project folder (it contains rvs-project.yaml)")
     imp.add_argument("file", type=Path)
     imp.add_argument("--dry-run", action="store_true", help="show what would change; write nothing")
     imp.add_argument("--skip-errors", action="store_true", help="apply the valid rows even if some rows have errors")

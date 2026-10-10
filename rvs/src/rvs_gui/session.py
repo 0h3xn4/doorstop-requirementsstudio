@@ -21,6 +21,7 @@ class ProjectSession(QObject):
     loaded = Signal()  # a project was opened or fully refreshed
     item_changed = Signal(str)  # uid of the item that was created or edited (after refresh)
     active_cr_changed = Signal(object)  # change request id or None
+    load_failed = Signal(str)  # a refresh found the project unreadable (the old data stays on screen)
 
     def __init__(self, parent: QObject | None = None, user: str | None = None) -> None:
         super().__init__(parent)
@@ -52,6 +53,9 @@ class ProjectSession(QObject):
         self.report = report
         if report.exit_code == 3 or report.config is None:
             return report
+        if self.root is not None and Path(root).resolve() != self.root.resolve() and self.active_cr is not None:
+            self.active_cr = None  # a change request belongs to its project
+            self.active_cr_changed.emit(None)
         self.root, self.cfg = Path(root), report.config
         self._load(report)
         self.loaded.emit()
@@ -73,6 +77,9 @@ class ProjectSession(QObject):
             self.cfg = report.config
             self._load(report)
             self.loaded.emit()
+        else:
+            problems = " ".join(f"{f.message} {f.hint}".strip() for f in report.findings if f.severity.value == "error")
+            self.load_failed.emit(f"The project could not be re-read, so what you see may be out of date. {problems}")
 
     def _load(self, report: ValidationReport) -> None:
         assert self.root is not None

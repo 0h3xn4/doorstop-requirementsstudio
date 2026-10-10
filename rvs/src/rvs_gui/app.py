@@ -116,12 +116,18 @@ class FilterBar(QWidget):
         lay.addWidget(self.status)
         lay.addWidget(self.only_problems)
 
-    def set_statuses(self, statuses: Sequence[str]) -> None:
+    def set_statuses(self, statuses: Sequence[str]) -> bool:
+        """Refill the status choices, keeping the selected one. Returns False if it no longer exists (the filter was
+        reset to 'All statuses', and the caller must reset the table filter too)."""
+        keep = self.status.currentText() if self.status.currentIndex() > 0 else ""
         self.status.blockSignals(True)
         self.status.clear()
         self.status.addItem("All statuses")
         self.status.addItems(list(statuses))
+        found = self.status.findText(keep) if keep else 0
+        self.status.setCurrentIndex(max(found, 0))
         self.status.blockSignals(False)
+        return not keep or found > 0
 
 
 class MainWindow(QMainWindow):
@@ -315,6 +321,7 @@ class MainWindow(QMainWindow):
 
     def _connect(self) -> None:
         self.session.loaded.connect(self._on_loaded)
+        self.session.load_failed.connect(lambda text: self.notification.show_message("error", text))
         self.session.item_changed.connect(self._on_item_changed)
         self.editor.message.connect(self.notification.show_message)
         for cc_view in (self.changes_view, self.baselines_view, self.diff_view):
@@ -374,6 +381,9 @@ class MainWindow(QMainWindow):
             self.open_project(Path(path))
 
     def open_project(self, path: Path) -> bool:
+        if self._opening:
+            self.notification.show_message("info", "A project is being opened. Please wait a moment.")
+            return False
         if self.editor.is_dirty():
             self.notification.show_message("warning", "Save or revert your changes before opening another project.")
             return False
@@ -395,6 +405,13 @@ class MainWindow(QMainWindow):
 
         def done(report: object) -> None:
             self._opening = False
+            if self.editor.is_dirty():  # the user started editing while the project was loading
+                self.notification.show_message(
+                    "warning",
+                    "The project was not opened because you started editing. Save or revert, then open it again.",
+                )
+                self.project_opened.emit(False)
+                return
             self.project_opened.emit(self._finish_open(path, report))  # type: ignore[arg-type]
 
         def failed(exc: Exception) -> None:
@@ -432,12 +449,18 @@ class MainWindow(QMainWindow):
 
     def new_project_dialog(self) -> None:
         dlg = NewProjectDialog(self)
-        if dlg.exec():
-            self.create_project(*dlg.values())
+        try:
+            if dlg.exec():
+                self.create_project(*dlg.values())
+        finally:
+            dlg.deleteLater()
 
     def create_project(self, folder: Path, name: str, template: str, git: bool) -> bool:
         from rvs_core.project_templates import create_from_template
 
+        if self._opening:
+            self.notification.show_message("info", "A project is being opened. Please wait a moment.")
+            return False
         if self.editor.is_dirty():
             self.notification.show_message("warning", "Save or revert your changes before creating a project.")
             return False
@@ -494,7 +517,8 @@ class MainWindow(QMainWindow):
         counts = {i.uid: s.counts_for(i.uid) for i in s.items}
         self.table_model.set_items(s.items, counts)
         self._apply_column_visibility()
-        self.filter_bar.set_statuses(s.cfg.vocab.values("status"))
+        if not self.filter_bar.set_statuses(s.cfg.vocab.values("status")):
+            self.table_proxy.set_status("")  # the filtered status was removed from the vocabulary
         self.doc_tree.populate(s)
         self.problems_panel.set_findings(s.findings)
         self.statusBar().showMessage(self._status_text())
@@ -503,8 +527,11 @@ class MainWindow(QMainWindow):
             if not self.editor.is_dirty():
                 self.editor.load(uid)
             self._show_selection(uid)
-        elif uid:
-            self.editor.current_uid = None
+        elif uid:  # the item is gone (another project, or deleted): nothing may stay bound to it
+            self.editor.clear()
+            self.impact_panel.clear()
+            self.graph_view.uid = None
+            self.graph_view.refresh()
 
     def _on_editor_loaded(self, uid: str) -> None:
         self.impact_panel.set_item(uid)
@@ -516,17 +543,22 @@ class MainWindow(QMainWindow):
             self.notification.show_message("info", "Open a project first.")
             return
         dlg = ExportDialog(self.session, self, current_uid=self.editor.current_uid or "")
-        if dlg.exec():
-            if not dlg.path.text().strip():
-                self.notification.show_message("warning", "Choose a file name for the export.")
-                return
-            self.export_to(dlg.request(), dlg.destination())
+        try:
+            if dlg.exec():
+                if not dlg.path.text().strip():
+                    self.notification.show_message("warning", "Choose a file name for the export.")
+                    return
+                self.export_to(dlg.request(), dlg.destination())
+        finally:
+            dlg.deleteLater()
 
     def export_to(self, request: ExportRequest, path: Path) -> None:
         """Build and write ``request`` to ``path`` on a worker thread; the window stays usable."""
         s = self.session
         if s.cfg is None or s.graph is None:
             self.notification.show_message("info", "Open a project first.")
+            return
+        if path.exists() and not self.confirm_overwrite(path):
             return
         cfg, items, graph, user, label = s.cfg, list(s.items), s.graph, s.user, s.baseline_label
 
@@ -556,6 +588,8 @@ class MainWindow(QMainWindow):
         if self.session.cfg is None:
             self.notification.show_message("info", "Open a project first.")
             return
+        if self._refuse_while_dirty("importing"):
+            return
         chosen, _ = QFileDialog.getOpenFileName(
             self, "Import items", "", "Item tables and ReqIF files (*.csv *.xlsx *.reqif)"
         )
@@ -565,8 +599,11 @@ class MainWindow(QMainWindow):
         if rows is None:
             return
         dlg = ImportDialog(self.session, rows, self)
-        if dlg.exec():
-            self.apply_import(dlg.plan, why=dlg.reason.text(), skip_errors=dlg.skip_errors.isChecked())
+        try:
+            if dlg.exec():
+                self.apply_import(dlg.plan, why=dlg.reason.text(), skip_errors=dlg.skip_errors.isChecked())
+        finally:
+            dlg.deleteLater()
 
     def read_import_file(self, path: Path) -> list[dict[str, str]] | None:
         suffix = path.suffix.lower()
@@ -671,6 +708,7 @@ class MainWindow(QMainWindow):
             if row >= 0 and not idx.isValid():  # hidden by a filter: show everything so the item is visible
                 self.filter_bar.search.clear()
                 self.filter_bar.status.setCurrentIndex(0)
+                self.table_proxy.set_status("")  # setCurrentIndex(0) is a no-op when it already shows 'All statuses'
                 self.filter_bar.only_problems.setChecked(False)
                 self.doc_tree.select_document(None)
                 idx = self.table_proxy.mapFromSource(self.table_model.index(row, 0))
@@ -821,6 +859,9 @@ class MainWindow(QMainWindow):
             except (ValueError, ProjectError) as exc:
                 self.notification.show_message("error", str(exc))
                 return False
+            except OSError as exc:
+                self.notification.show_message("error", f"{uid} could not be saved ({exc.strerror or exc}).")
+                return False
             else:
                 return True
         return False
@@ -859,9 +900,12 @@ class MainWindow(QMainWindow):
         current = self.editor.current_uid
         if current in uids:
             target = uids[(uids.index(current) + step) % len(uids)]
-        else:
-            later = [u for u in self.session.items if u.uid == current]
-            target = uids[0] if step > 0 or not later else uids[-1]
+        else:  # not itself a problem: the neighbour in table order, wrapping around
+            order = {i.uid: n for n, i in enumerate(self.session.items)}
+            here = order.get(current or "", -1)
+            after = [u for u in uids if order[u] > here]
+            before = [u for u in uids if order[u] < here]
+            target = (after[0] if after else uids[0]) if step > 0 else (before[-1] if before else uids[-1])
         self.tabs.setCurrentIndex(0)
         return target if self.select_item(target) else None
 
@@ -881,14 +925,22 @@ class MainWindow(QMainWindow):
         if self.session.cfg is None:
             self.notification.show_message("info", "Open a project first.")
             return
-        GlossaryDialog(self.session, self).exec()
+        dlg = GlossaryDialog(self.session, self)
+        try:
+            dlg.exec()
+        finally:
+            dlg.deleteLater()
 
     def show_shortcuts(self) -> None:
-        ShortcutsDialog(self).exec()
+        dlg = ShortcutsDialog(self)
+        try:
+            dlg.exec()
+        finally:
+            dlg.deleteLater()
 
     def show_help(self, anchor: str = "") -> HelpViewer:
         if self._help is None:
-            self._help = HelpViewer()
+            self._help = HelpViewer(self)  # owned by the main window: closing the window closes the guide
         self._help.show_section(anchor)
         self._help.show()
         self._help.raise_()
@@ -899,7 +951,38 @@ class MainWindow(QMainWindow):
         if raw:
             self.restoreGeometry(QByteArray.fromBase64(raw.encode("ascii")))
 
+    def ask_unsaved(self) -> str:
+        """'save', 'discard' or 'cancel': what to do with edits that are not saved (overridden in tests)."""
+        box = QMessageBox(
+            QMessageBox.Icon.Question,
+            TITLE,
+            f"{self.editor.current_uid} has unsaved changes.",
+            QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel,
+            self,
+        )
+        answer = box.exec()
+        return {
+            QMessageBox.StandardButton.Save: "save",
+            QMessageBox.StandardButton.Discard: "discard",
+        }.get(QMessageBox.StandardButton(answer), "cancel")
+
+    def confirm_overwrite(self, path: Path) -> bool:
+        answer = QMessageBox.question(
+            self,
+            TITLE,
+            f"{path.name} already exists. Replace it?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        return answer == QMessageBox.StandardButton.Yes
+
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 - Qt API
+        if self.editor.is_dirty():
+            choice = self.ask_unsaved()
+            if choice == "cancel" or (choice == "save" and not self.editor.save()):
+                event.ignore()
+                return
+        if self._help is not None:
+            self._help.close()
         userconfig.update(geometry=bytes(self.saveGeometry().toBase64().data()).decode("ascii"))
         super().closeEvent(event)
 
@@ -908,17 +991,32 @@ class MainWindow(QMainWindow):
         if self.session.cfg is None:
             self.notification.show_message("info", "Open a project first.")
             return
+        if self._refuse_while_dirty("creating a new item"):
+            return
         current = self.session.item(self.editor.current_uid or "")
         document = current.document if current and self.session.kind_of(current.document) == "requirements" else None
         if self.mode == "guided":
             wizard = NewRequirementWizard(self.session, self, document=document)
-            if wizard.exec():
-                self.create_from_spec(wizard.spec())
+            try:
+                if wizard.exec():
+                    self.create_from_spec(wizard.spec())
+            finally:
+                wizard.deleteLater()
             return
         dlg = NewItemDialog(self.session, self, document=document)
-        if dlg.exec():
-            prefix, title, parents = dlg.values()
-            self.create_item(prefix, title, parents)
+        try:
+            if dlg.exec():
+                prefix, title, parents = dlg.values()
+                self.create_item(prefix, title, parents)
+        finally:
+            dlg.deleteLater()
+
+    def _refuse_while_dirty(self, what: str) -> bool:
+        """True (with a message) when edits are pending: ask for them to be saved *before* the user fills in a dialog."""
+        if self.editor.is_dirty():
+            self.notification.show_message("warning", f"Save or revert your changes before {what}.")
+            return True
+        return False
 
     def create_from_spec(self, spec: RequirementSpec) -> str | None:
         """Create the requirement collected by the wizard and, if asked, its planned verification item."""
@@ -960,10 +1058,15 @@ class MainWindow(QMainWindow):
         if self.session.cfg is None:
             self.notification.show_message("info", "Open a project first.")
             return
+        if self._refuse_while_dirty("creating a new item"):
+            return
         dlg = NewItemDialog(self.session, self, kind="verification")
-        if dlg.exec():
-            prefix, _title, targets = dlg.values()
-            self.create_verification(prefix, targets)
+        try:
+            if dlg.exec():
+                prefix, _title, targets = dlg.values()
+                self.create_verification(prefix, targets)
+        finally:
+            dlg.deleteLater()
 
     def create_verification(self, prefix: str, targets: Sequence[str]) -> str | None:
         """New verification item (planned) that verifies ``targets``; method and level follow the first target."""

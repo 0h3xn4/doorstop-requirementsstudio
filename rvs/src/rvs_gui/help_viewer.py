@@ -1,6 +1,6 @@
 """The bundled user guide, read from local files only (no browser, no network)."""
 
-from PySide6.QtCore import QUrl
+from PySide6.QtCore import Qt, QUrl
 from PySide6.QtWidgets import QTextBrowser, QVBoxLayout, QWidget
 
 from rvs_core.guide import guide_path
@@ -26,7 +26,7 @@ def guide_css() -> str:
 
 class HelpViewer(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
+        super().__init__(parent, Qt.WindowType.Window)  # a separate window, but closed with its owner
         self.setWindowTitle("RVS user guide")
         self.resize(960, 720)
         self.browser = QTextBrowser()

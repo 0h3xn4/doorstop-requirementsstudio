@@ -24,9 +24,11 @@ def parse_list(text: str) -> list[str]:
 
 
 def normalise(value: Any, kind: str) -> Any:
+    """A stored value in the form the widgets compare: lists as lists, everything else as stripped text (YAML keeps a
+    trailing newline on multi-line text, which ``get_value`` strips, so both sides must be stripped)."""
     if kind in LIST_TYPES:
         return [str(v) for v in value] if value else []
-    return "" if value is None else str(value)
+    return "" if value is None else str(value).strip()
 
 
 def label_text(adef: AttributeDef) -> str:

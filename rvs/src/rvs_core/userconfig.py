@@ -31,12 +31,22 @@ def load() -> dict[str, Any]:
         raw = json.loads(_path().read_text(encoding="utf-8"))
         if isinstance(raw, dict):
             data.update({k: v for k, v in raw.items() if k in DEFAULTS})
-    except (OSError, ValueError):
+    except (OSError, ValueError, RecursionError):
         pass
     if data["mode"] not in ("guided", "expert"):
         data["mode"] = "guided"
     if data["theme"] not in ("light", "dark", "system"):
         data["theme"] = "light"
+    if not isinstance(data["geometry"], str) or not data["geometry"].isascii():
+        data["geometry"] = ""
+    shortcuts = data["shortcuts"]
+    data["shortcuts"] = (
+        {k: v for k, v in shortcuts.items() if isinstance(k, str) and isinstance(v, str)}
+        if isinstance(shortcuts, dict)
+        else {}
+    )
+    recent = data["recent"]
+    data["recent"] = [p for p in recent if isinstance(p, str) and p] if isinstance(recent, list) else []
     return data
 
 

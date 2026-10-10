@@ -20,6 +20,7 @@ class DocumentTree(QTreeView):
         self.setModel(self._model)
         self.setHeaderHidden(True)
         self._syncing = False
+        self.selectionModel().currentChanged.connect(self._on_current)  # once: populate() runs after every refresh
         self._doc_nodes: dict[str, QStandardItem] = {}
         self._item_nodes: dict[str, QStandardItem] = {}
 
@@ -51,7 +52,6 @@ class DocumentTree(QTreeView):
         for root_prefix in by_parent.get(None, []):
             add_doc(root_prefix, None)
         self.expandToDepth(0)
-        self.selectionModel().currentChanged.connect(self._on_current)
 
     @staticmethod
     def _node(label: str, kind: str, key: str) -> QStandardItem:

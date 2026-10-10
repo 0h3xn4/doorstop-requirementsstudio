@@ -43,6 +43,8 @@ class ChangesView(QWidget):
         self.table.verticalHeader().hide()
         self.table.horizontalHeader().setStretchLastSection(True)
         self.heading = QLabel("Select a change request, or fill in the form and press New.")
+        self._refreshing = False
+        self._snapshot: tuple[str, str, str, str] = ("", "", "", "")
         self.title = QLineEdit()
         self.status = QComboBox()
         self.description = QPlainTextEdit()
@@ -92,15 +94,22 @@ class ChangesView(QWidget):
             return
         rows = [[c.id, c.status, c.title, c.raised_by, ", ".join(c.items)] for c in found]
         prov = Provenance.now(self.session.cfg, user=self.session.user)
-        self.model.set_matrix(
-            MatrixTable(
-                "Change requests", ["ID", "Status", "Title", "Raised by", "Items"], rows, [None] * len(rows), prov
+        self._refreshing = True  # re-selecting the row below must not reload (and so overwrite) the form
+        try:
+            self.model.set_matrix(
+                MatrixTable(
+                    "Change requests", ["ID", "Status", "Title", "Raised by", "Items"], rows, [None] * len(rows), prov
+                )
             )
-        )
-        self.table.resizeColumnsToContents()
-        self.table.horizontalHeader().setStretchLastSection(True)
-        if self.current_id:
-            self.select(self.current_id)
+            self.table.resizeColumnsToContents()
+            self.table.horizontalHeader().setStretchLastSection(True)
+            row = self._row_of(self.current_id) if self.current_id else -1
+            if row >= 0:
+                self.table.selectRow(row)
+        finally:
+            self._refreshing = False
+        if self.current_id and row >= 0 and not self._form_dirty():
+            self._load(self.current_id)
 
     def _row_of(self, cr_id: str) -> int:
         return next((r for r in range(self.model.rowCount()) if self.model.index(r, 0).data() == cr_id), -1)
@@ -111,7 +120,15 @@ class ChangesView(QWidget):
             self.table.selectRow(row)
             self._load(cr_id)
 
+    def _form_values(self) -> tuple[str, str, str, str]:
+        return (self.title.text(), self.status.currentText(), self.description.toPlainText(), self.items.text())
+
+    def _form_dirty(self) -> bool:
+        return self._form_values() != self._snapshot
+
     def _on_row(self, current: object, _previous: object) -> None:
+        if self._refreshing:
+            return
         idx = self.table.currentIndex()
         if idx.isValid():
             self._load(str(self.model.index(idx.row(), 0).data()))
@@ -126,6 +143,7 @@ class ChangesView(QWidget):
         self.status.setCurrentText(cr.status)
         self.description.setPlainText(cr.description)
         self.items.setText(", ".join(cr.items))
+        self._snapshot = self._form_values()
         self.use_for_edits.blockSignals(True)
         self.use_for_edits.setChecked(self.session.active_cr == cr_id)
         self.use_for_edits.blockSignals(False)

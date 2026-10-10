@@ -119,15 +119,20 @@ class GlossaryDialog(QDialog):
         acronyms = {a: e for a, e in self._texts(self.acronyms) if len(a) >= 2 and e}
         return terms, acronyms
 
-    def save(self) -> None:
+    def save(self) -> bool:
         assert self.session.root is not None
         terms, acronyms = self.entries()
-        save_glossary(self.session.root, terms, acronyms)
+        try:
+            save_glossary(self.session.root, terms, acronyms)
+        except OSError as exc:
+            self._say(f"The glossary could not be saved ({exc.strerror or exc}). Nothing was changed.")
+            return False
         self.session.refresh()
+        return True
 
     def _accept(self) -> None:
-        self.save()
-        self.accept()
+        if self.save():
+            self.accept()
 
 
 _ = Qt

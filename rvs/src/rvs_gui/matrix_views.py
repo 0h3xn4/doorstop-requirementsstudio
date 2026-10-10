@@ -162,6 +162,9 @@ class MatrixView(QWidget):
         if fmt not in TABLE_FORMATS:
             self.message.emit("error", f"'.{fmt}' is not a supported format. Use one of: {', '.join(TABLE_FORMATS)}.")
             return
+        if self.model.matrix is None:
+            self.message.emit("info", "There is nothing to export yet: open a project first.")
+            return
         table = self.matrix
 
         def work() -> int:

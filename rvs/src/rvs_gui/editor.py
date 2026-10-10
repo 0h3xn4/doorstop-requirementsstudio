@@ -51,6 +51,7 @@ class RequirementEditor(QWidget):
         self._loading = False
         self._last_dirty = False
         self._help_visible = True
+        self._cfg_built: object | None = None
         self._help_for: dict[QWidget, str] = {}
 
         self.heading = QLabel("No item selected")
@@ -159,11 +160,42 @@ class RequirementEditor(QWidget):
             if not root_doc
             else "A top-level document: its requirements have no parents.",
         )
-        rules = {r["id"]: r.get("params", {}) for r in cfg.rules["rules"]}
+        self._cfg_built = cfg
+
+    def _configure_highlighter(self) -> None:
+        cfg = self.session.cfg
+        assert cfg is not None
+        rules = {r["id"]: r.get("params") or {} for r in cfg.rules["rules"]}
         params = rules.get("undefined-acronym", {})
+        min_length = params.get("min_length")
+        ignore = params.get("ignore")
         self.highlighter.configure(
-            set(cfg.glossary.acronyms), int(params.get("min_length", 2)), set(params.get("ignore", []))
+            set(cfg.glossary.acronyms),
+            min_length if isinstance(min_length, int) else 2,
+            {str(x) for x in ignore} if isinstance(ignore, list) else set(),
         )
+
+    def clear(self) -> None:
+        """Forget the item (the project changed): empty form, nothing to save."""
+        self._item = None
+        self.current_uid = None
+        self._fields.clear()
+        self._defs = []
+        self._cfg_built = None
+        self._loading = True
+        try:
+            self.statement.clear()
+            self.why.clear()
+            self.item_findings.clear()
+            self.preview.clear()
+            while self.form.rowCount():
+                self.form.removeRow(0)
+            self.heading.setText("No item selected")
+        finally:
+            self._loading = False
+        self.clear_suspect_button.setEnabled(False)
+        self.setEnabled(False)
+        self._update_buttons()
 
     def _track_help(self, widget: QWidget, text: str) -> None:
         self._help_for[widget] = text
@@ -202,8 +234,14 @@ class RequirementEditor(QWidget):
             return
         self._loading = True
         try:
-            if self._item is None or self._item.document != item.document or not self._fields:
+            if (
+                self._item is None
+                or self._item.document != item.document
+                or not self._fields
+                or self._cfg_built is not self.session.cfg  # the project or its configuration changed
+            ):
                 self._rebuild_form(item)
+            self._configure_highlighter()
             self._item = item
             self.current_uid = uid
             self.heading.setText(f"{uid}  {item.attrs.get('title') or item.header}")
@@ -268,9 +306,14 @@ class RequirementEditor(QWidget):
         uid = self.current_uid
         if uid is None:
             return
+        if self.is_dirty():
+            self.message.emit(
+                "warning", f"Save or revert your changes to {uid} first: clearing links reloads the item."
+            )
+            return
         try:
             self.session.clear_suspect(uid, why=self.why.text())
-        except (ReasonRequiredError, ValueError, ProjectError) as exc:
+        except (ReasonRequiredError, ValueError, ProjectError, OSError) as exc:
             self.message.emit("error", str(exc))
             return
         self.load(uid)
@@ -296,6 +339,11 @@ class RequirementEditor(QWidget):
                 self.session.update_item(uid, text=text, attrs=attrs, why=why)
         except (ReasonRequiredError, ValueError, ProjectError) as exc:
             self.message.emit("error", str(exc))
+            return False
+        except OSError as exc:
+            self.message.emit(
+                "error", f"{uid} could not be saved ({exc.strerror or exc}). Your changes are still in the editor."
+            )
             return False
         except Exception as exc:  # noqa: BLE001 - never show a traceback to the user (spec rule 19)
             self.message.emit("error", f"{uid} could not be saved: {exc}. Your changes are still in the editor.")

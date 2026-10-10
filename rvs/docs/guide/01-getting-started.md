@@ -137,6 +137,7 @@ Preferences are in a small `settings.json` in your user configuration folder: `~
 | `recent` | the last eight projects opened |
 | `shortcuts` | your shortcut overrides: action ID to key (see the table in the reference) |
 | `geometry` | window size and position (an encoded string; delete the key to reset the window) |
+| `layout` | which panels are shown and the widths of the item table's columns (encoded strings; delete the key to reset them) |
 
 A broken or hand-edited file falls back to the defaults. Next to it RVS keeps a `crash` folder and a `cache.key` file (a random key that makes the speed-up cache of your projects tamper-evident; delete it and the caches are rebuilt).
 

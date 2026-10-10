@@ -10,7 +10,7 @@ Add an entry to `"shortcuts"` in `settings.json` (see *Where RVS keeps its own s
 
 <!-- shortcut-ids-table -->
 
-Besides shortcuts, `settings.json` holds `mode`, `theme`, `recent` and `geometry`; the keys are listed under *Where RVS keeps its own settings*.
+Besides shortcuts, `settings.json` holds `mode`, `theme`, `recent`, `geometry` and `layout`; the keys are listed under *Where RVS keeps its own settings*.
 
 ## Project files and format
 

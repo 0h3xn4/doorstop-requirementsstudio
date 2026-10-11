@@ -28,51 +28,62 @@ def add_parsers(sub: "argparse._SubParsersAction[argparse.ArgumentParser]") -> N
     bsub = base.add_subparsers(dest="baseline_command", required=True)
     create = bsub.add_parser("create", help="create a baseline (commits the project and tags it)")
     create.add_argument("project", type=Path, help="the project folder (it contains rvs-project.yaml)")
-    create.add_argument("name")
+    create.add_argument("name", help="baseline name, for example SRR or PDR (used for the tag; it can never be reused)")
     create.add_argument("-m", "--message", required=True, help="why this baseline exists")
     create.add_argument("--defer", action="append", default=[], metavar="CR-ID=REASON",
                         help="defer an open change request so it does not block the baseline (repeatable)")  # fmt: skip
     create.add_argument(
         "--init-git", action="store_true", help="create a Git repository in the project folder if none exists"
     )
-    create.add_argument("--user")
+    create.add_argument("--user", help="name recorded in the baseline (default: login name)")
     lst = bsub.add_parser("list", help="list the baselines")
     lst.add_argument("project", type=Path, help="the project folder (it contains rvs-project.yaml)")
-    lst.add_argument("--format", choices=("text", "json"), default="text")
+    lst.add_argument("--format", choices=("text", "json"), default="text", help="how to print the list")
     ver = bsub.add_parser("verify", help="check that a baseline has not been tampered with")
     ver.add_argument("project", type=Path, help="the project folder (it contains rvs-project.yaml)")
-    ver.add_argument("name")
+    ver.add_argument("name", help="the baseline to check")
 
     cr = sub.add_parser("cr", help="change requests")
     csub = cr.add_subparsers(dest="cr_command", required=True)
     new = csub.add_parser("new", help="raise a change request")
     new.add_argument("project", type=Path, help="the project folder (it contains rvs-project.yaml)")
-    new.add_argument("title")
-    new.add_argument("-d", "--description", default="")
+    new.add_argument("title", help="a short title for the change request")
+    new.add_argument("-d", "--description", default="", help="what is to change and why")
     new.add_argument("--item", action="append", default=[], help="affected item (repeatable)")
-    new.add_argument("--user")
-    for name in ("list", "show", "status", "defer"):
-        sp = csub.add_parser(name)
+    new.add_argument("--user", help="name recorded as the author (default: login name)")
+    cr_help = {
+        "list": "list the change requests",
+        "show": "show one change request",
+        "status": "move a change request to another status (open, in-review, approved, ... as configured)",
+        "defer": "defer a change request so that it does not block a baseline",
+    }
+    for name, text in cr_help.items():
+        sp = csub.add_parser(name, help=text)
         sp.add_argument("project", type=Path, help="the project folder (it contains rvs-project.yaml)")
         if name != "list":
-            sp.add_argument("id")
+            sp.add_argument("id", help="the change request, for example CR-0001")
         if name == "status":
-            sp.add_argument("status")
-            sp.add_argument("--note", default="")
+            sp.add_argument("status", help="the new status; the choices are set in config/changes.yaml")
+            sp.add_argument("--note", default="", help="a remark recorded with the change")
         if name == "defer":
-            sp.add_argument("--reason", required=True)
+            sp.add_argument("--reason", required=True, help="why it is deferred (recorded)")
         if name in ("status", "defer"):
-            sp.add_argument("--user")
+            sp.add_argument("--user", help="name recorded with the change (default: login name)")
 
     diff = sub.add_parser(
         "diff", help="differences between two baselines, or a baseline and the working copy ('working')"
     )
     diff.add_argument("project", type=Path, help="the project folder (it contains rvs-project.yaml)")
-    diff.add_argument("left")
-    diff.add_argument("right")
+    diff.add_argument("left", help="a baseline name, or 'working' for the project as it is now")
+    diff.add_argument("right", help="a baseline name, or 'working' for the project as it is now")
     diff.add_argument("--document", help="only this document")
-    diff.add_argument("--format", choices=("text", "json", "csv", "html", "docx", "pdf"), default="text")
-    diff.add_argument("--output", "-o", type=Path)
+    diff.add_argument(
+        "--format",
+        choices=("text", "json", "csv", "html", "docx", "pdf"),
+        default="text",
+        help="how to print the differences (docx and pdf need --output)",
+    )
+    diff.add_argument("--output", "-o", type=Path, help="write to this file instead of standard output")
 
 
 def _store(root: Path) -> ChangeRequestStore:

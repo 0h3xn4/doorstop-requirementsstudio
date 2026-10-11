@@ -36,7 +36,7 @@ Status: **fixed** or **deferred** (reason given).
 | 18 | duplicated content | Terms and install steps repeated in the guide, `RELEASE.md`, and (new) the manual. | Medium | Rule adopted and written down in the developer guide: the in-app guide is the reference; new pages are short, task-oriented and link to it instead of copying its tables. The quick start appears in the two READMEs and getting-started on purpose (it is the first thing a visitor reads). | fixed |
 | 19 | operating systems | Docs accurate, but a newcomer was not told which systems are tested. | Medium | README and getting-started: Linux and Windows are tested on every change; macOS is not; the Windows installer has never been run. | fixed |
 | 20 | external links | See "How it was verified": most hosts cannot be reached from the sandbox. | Info | Re-run the online pass in a normal environment. | deferred |
-| 21 | CLI `--help` text | Some positional arguments and options have no help text. | Low | The brief excludes code changes. (Done in a related change: every `project` argument now says what it is, the export help lists ReqIF, exit codes are in the epilog.) | deferred |
+| 21 | CLI `--help` text | Some positional arguments and options have no help text. | Low | Help text added to every argument and subcommand that lacked it (follow-up PR, after the documentation PR); `tests/test_cli.py` fails if one is missing again. | fixed (follow-up) |
 | 22 | upstream README inside the new root README | Its headings had to be one level deeper; its links are all absolute. | Info | Headings demoted (8 lines); nothing else; see below. | fixed |
 
 ## Found while doing the work
@@ -99,6 +99,6 @@ No links or images needed changing: every link and image in the upstream README 
 5. **Release archives:** none is published, so Getting started leads with `pip install ./rvs`. If you publish archives, add a download step.
 6. **macOS and the Windows installer** have never been run; the pages say so. Tell me if you can test them.
 7. **Screenshots** were generated offscreen from the fictional examples; replace them if you want a different look.
-8. **Item 21** (command-line help text) and **item 20** (online link pass) as above.
+8. **Item 20** (online link pass) as above. (Item 21, command-line help text, was fixed in a follow-up.)
 
 Next: [Documentation index](README.md) · [Engineering audit](AUDIT.md) · [Developer guide](developer/README.md)

@@ -4,6 +4,9 @@ This page lists what changed in each version of Requirements & Verification Stud
 
 ## [Unreleased]
 
+### Changed
+- Every command-line argument and subcommand of `rvs` now has help text (`rvs cr`, `rvs baseline`, `rvs diff`, `rvs init`, `rvs import`); a test keeps it that way.
+
 ### Documentation
 - New documentation set: a documentation index, getting started, a task-based user manual, an examples guide, FAQ, troubleshooting, glossary, tips, developer guide, contributing guide and this changelog. The repository README now describes RVS first and keeps the original Doorstop README below it, verbatim.
 - Corrected the guide: the `layout` key of `settings.json`; the specification no longer says ReqIF is deferred.

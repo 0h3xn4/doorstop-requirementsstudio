@@ -80,9 +80,9 @@ def build_parser() -> argparse.ArgumentParser:
     init = sub.add_parser("init", help="create a new project from a template")
     init.add_argument("project", type=Path, nargs="?", help="the folder to create (must be empty or new)")
     init.add_argument("--name", help="project name")
-    init.add_argument("--template", default="minimal")
+    init.add_argument("--template", default="minimal", help="template key (default: minimal); see --list-templates")
     init.add_argument("--git", action="store_true", help="also create a Git repository in the folder")
-    init.add_argument("--list-templates", action="store_true")
+    init.add_argument("--list-templates", action="store_true", help="list the available templates and stop")
 
     selftest = sub.add_parser("selftest", help="check the installation: bundled files, exports, Git, offline guard")
     selftest.add_argument(
@@ -97,7 +97,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="import items from a CSV or XLSX file written by 'export --items', or from a ReqIF file (exit 0 ok, 1 errors)",
     )
     imp.add_argument("project", type=Path, help="the project folder (it contains rvs-project.yaml)")
-    imp.add_argument("file", type=Path)
+    imp.add_argument("file", type=Path, help="the .csv, .xlsx or .reqif file to import")
     imp.add_argument("--dry-run", action="store_true", help="show what would change; write nothing")
     imp.add_argument("--skip-errors", action="store_true", help="apply the valid rows even if some rows have errors")
     imp.add_argument("--reason", default="", help="why the items change (required for baselined items)")

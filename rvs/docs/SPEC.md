@@ -164,7 +164,7 @@ See `DECISIONS.md` for the answers recorded so far.
 - [x] **Doorstop item format:** YAML (answered).
 - [x] **Numbering scheme:** `SYS-0012` (answered).
 - [ ] **Standards text:** will you provide ECSS-E-ST-10-02C and ECSS-E-ST-10-06C as files? Without them, placeholders stay.
-- [x] **ReqIF:** deferred past version 1 (answered).
+- [x] **ReqIF:** deferred past version 1 (answered), then implemented after version 1 (decision D73): export and import work; see the user guide.
 - [ ] **Operating systems:** Windows only, Linux only, or both? (default: both)
 - [ ] **Evidence storage:** repository, network share, or document number only? (default: repository path or doc number + revision)
 - [ ] **Approval:** status field enough, or review and sign-off record per baseline? (default: status field)

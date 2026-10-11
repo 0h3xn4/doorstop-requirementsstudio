@@ -1,5 +1,7 @@
 # Full audit of RVS (post-v1) — findings, fixes and what remains
 
+> This page is the audit of the **code**. The audit of the **documentation** is in [DOCS_AUDIT.md](DOCS_AUDIT.md).
+
 Scope: everything in `rvs/` at commit `6eff710` (v1 plus the post-v1 items). Eight independent read-only audits were run
 in parallel, each by a separate agent that had not seen the others' reports; the findings were then triaged here and fixed
 test-first. Two audits did not finish (the test-suite audit and the performance audit were cut off by a usage limit);

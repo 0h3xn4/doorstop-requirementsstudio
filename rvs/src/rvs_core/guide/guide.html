@@ -251,6 +251,10 @@ td { padding: 4px 8px; }
 <td><code>geometry</code></td>
 <td>window size and position (an encoded string; delete the key to reset the window)</td>
 </tr>
+<tr>
+<td><code>layout</code></td>
+<td>which panels are shown and the widths of the item table's columns (encoded strings; delete the key to reset them)</td>
+</tr>
 </tbody>
 </table>
 <p>A broken or hand-edited file falls back to the defaults. Next to it RVS keeps a <code>crash</code> folder and a <code>cache.key</code> file (a random key that makes the speed-up cache of your projects tamper-evident; delete it and the caches are rebuilt).</p>
@@ -870,7 +874,7 @@ rvs import my-project items.xlsx --reason &quot;Re-numbered after review&quot;
 </tr>
 </tbody>
 </table>
-<p>Besides shortcuts, <code>settings.json</code> holds <code>mode</code>, <code>theme</code>, <code>recent</code> and <code>geometry</code>; the keys are listed under <em>Where RVS keeps its own settings</em>.</p>
+<p>Besides shortcuts, <code>settings.json</code> holds <code>mode</code>, <code>theme</code>, <code>recent</code>, <code>geometry</code> and <code>layout</code>; the keys are listed under <em>Where RVS keeps its own settings</em>.</p>
 <a name="project-files-and-format"></a><h2 id="project-files-and-format">Project files and format</h2>
 <p>A project is a folder:</p>
 <pre><code>my-project/

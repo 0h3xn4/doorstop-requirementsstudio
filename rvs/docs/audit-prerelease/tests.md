@@ -2,7 +2,7 @@
 
 Detailed report of one auditor (evidence, commands, mutation probes). The consolidated list is [AUDIT.md](../../AUDIT.md).
 
-(status: written early; mutation campaign is PARTIAL, 27 of 110 mutants run; section "Mutation probes" says exactly which. Appended to as more is confirmed.)
+(status: COMPLETE. 110 mutants run, 66 survived; reversed-order and perturbed-environment full runs done.)
 
 ## Coverage
 Files read in full: rvs/tests/conftest.py, golden_support.py, golden/ (manifests + sampled files), all 63 test_*.py (adapter ... yaml_loader, incl. all test_audit_*, test_gui_*, test_review_*, test_packaging, test_performance), pyproject.toml (pytest/ruff/mypy config), .github/workflows/rvs-ci.yml (+ the three upstream workflows), docs/AUDIT.md, CLAUDE.md, CONTRIBUTING.md. Source read for judging: changecontrol/baselines.py, changes.py, manifests.py, diff.py, authoring.py, atomicio.py, adapter/cache.py, adapter/doorstop_adapter.py, vcs/git.py, validate.py, rules/engine.py, trace/*.py, exporters/itemsio.py (all), rvs_cli/main.py, rvs_cli/changecontrol.py.
@@ -24,8 +24,8 @@ Probes run (non-pytest): XLSX typed cells (date/float/bool) import - works; ref-
 ### TESTS-01 Manifest-name reservation race (O_EXCL) fix has no test that reaches it
 - Where: src/rvs_core/changecontrol/baselines.py:193-198 (`path.open("x")` / `except FileExistsError`); tests/test_audit_core.py:113 (`test_a_reserved_name_is_not_overwritten_by_a_loser`)
 - Severity: medium
-- Confidence: verified (coverage: lines 195-196 never executed in 820 tests)
-- What is wrong: AUDIT.md lists "two creators of the same baseline: manifest name reserved with an exclusive create" as fixed and tested by `...reserved_name_is_not_overwritten...`. That test pre-creates `baselines/R1.yaml`, so `create_baseline` stops at the earlier `manifest_path(...).exists()` check (line 158); the exclusive-create branch and the "loser must not delete the winner's manifest" logic are never run. Replacing `open("x")` by `open("a")` would not be noticed (mutant B17 not yet run, coverage proves the branch is dead to the suite).
+- Confidence: verified (coverage: lines 195-196 never executed in 820 tests; mutant B17 survived)
+- What is wrong: AUDIT.md lists "two creators of the same baseline: manifest name reserved with an exclusive create" as fixed and tested by `...reserved_name_is_not_overwritten...`. That test pre-creates `baselines/R1.yaml`, so `create_baseline` stops at the earlier `manifest_path(...).exists()` check (line 158); the exclusive-create branch and the "loser must not delete the winner's manifest" logic are never run. Replacing `open("x")` by `open("a")` would not be noticed (mutant B17, `open("x")` -> `open("a")`, SURVIVED; B18 below too).
 - Evidence: `coverage report` missing lines for baselines.py: `195-196, 205-206, 259, 281, 323-324, 331-332, 432`.
 - Why it matters: the only protection against two users/processes creating the same immutable baseline is untested.
 - Proposed fix: test that monkeypatches `manifest_path(...).exists` to False for the first check (or creates the file between check and open via a patched `Path.open`) and asserts the winner's file is intact.
@@ -68,7 +68,7 @@ Probes run (non-pytest): XLSX typed cells (date/float/bool) import - works; ref-
 ### TESTS-07 Module-scoped golden fixtures run before the autouse "isolated user config" fixture
 - Where: tests/conftest.py:28 (`_isolated_user_config`, function scope) vs tests/test_golden.py:16-23 (module-scoped `minimal_outputs`, `satellite_outputs` call `validate_project`, which creates the signing key via `cache._key()`)
 - Severity: medium (test isolation)
-- Confidence: likely (after the run `fakehome/.config/rvs/cache.key` existed although every test sets RVS_CONFIG_DIR; module-scoped fixtures are instantiated before function-scoped autouse ones). I could not attribute it to a single test while the lead's full suite was running; to confirm run `HOME=<empty> pytest tests/test_golden.py` and look at `$HOME/.config/rvs`.
+- Confidence: verified. `env -u RVS_CONFIG_DIR HOME=<empty dir> pytest tests/test_golden.py` (4 tests) leaves `$HOME/.config/rvs/cache.key` behind although conftest sets RVS_CONFIG_DIR for every test (module-scoped fixtures are instantiated before function-scoped autouse ones).
 - Why it matters: the suite writes into the developer's real `~/.config/rvs` (cache.key) - the thing conftest says no test may do; on a read-only HOME CI the golden tests would behave differently.
 - Proposed fix: make the isolation fixture session/module scoped as well (set RVS_CONFIG_DIR in `pytest_configure`), or depend on it from the golden fixtures.
 
@@ -105,7 +105,7 @@ Probes run (non-pytest): XLSX typed cells (date/float/bool) import - works; ref-
 - Severity: medium; Confidence: verified (coverage)
 - validate.py: `RVS-SCHEMA-MISSING` (149), `RVS-SCHEMA-OLDER` (163), the doorstop "no child"/"suspect link" translators (244, 259), "no repository -> skip baseline checks" (382-383); `RVS-TREE-INVALID` never asserted anywhere (works when probed).
 - baselines.py: 157 invalid tag name, 205 deferral error, 259 rollback of a history file that did not exist before, 281, 323-324 damaged Git swallowed, 331 unparseable `created`, 432.
-- git.py: `.tmp`/`.git` file skip (121; mutant G01 not yet run), `undo_commit` "HEAD moved" no-op (156), all GitError wrappers (165, 187-195, 212, 236-239, 253, 267, 327-330), lightweight tags (277), `_login` fallback (45-48).
+- git.py: `.tmp`/`.git` file skip (121; mutant G01 survived), `undo_commit` "HEAD moved" no-op (156), all GitError wrappers (165, 187-195, 212, 236-239, 253, 267, 327-330), lightweight tags (277), `_login` fallback (45-48).
 - itemsio.py: XLSX typed cells date/float/bool (192-198; works when probed), int decode error (341-344), the whole ref-list decode (366-369), `free_attributes` columns (51-52), CSV rows with extra cells in `plan_import` (441-442), malformed ID (450), numbering-mismatch clean-up (664-665), creating inactive items / items with `ref` (doorstop_adapter 429, 431).
 - doorstop_adapter.py: tree cannot load (220), item file unreadable on edit (290), oversized/odd item files (91-96), create_document failure.
 - cli: `rvs init` without name, `rvs guide` without -o / guide missing, BrokenPipe, `_unexpected` for known error kinds / YAMLError / `RVS_DEBUG` (main.py 269, 315-321, 333, 349, 362-366), `--fast` never passed to the CLI in any test, "not an RVS project" exit 3 for baseline/cr/diff, "No baselines yet.", empty `-m`.
@@ -120,12 +120,12 @@ Probes run (non-pytest): XLSX typed cells (date/float/bool) import - works; ref-
 ### TESTS-11 Flakiness / environment dependence
 - Severity: low; Confidence: mix (see each)
 - tests/test_cache.py:140 `test_recently_modified_files_are_never_cached` depends on < 2 s between building the project and the second open (verified by delaying 2.2 s: hits 10 instead of 0). Margin measured 0.03 s at load average 7, so only a stalled VM/CI runner would trip it (likely-low).
-- tests/test_gui_io.py:137 `test_window_stays_responsive_while_exporting`: asserts tick count and max gap < 0.5 s while a worker thread renders a PDF (GIL contention) - machine speed dependent (reading-only; not yet repeated 10x).
+- tests/test_gui_io.py:137 `test_window_stays_responsive_while_exporting`: asserts tick count and max gap < 0.5 s while a worker thread renders a PDF (GIL contention) - machine speed dependent (repeated 10x, also under 6 busy-loop processes: always passed; residual risk reading-only).
 - Pixel/geometry/font-metric tests (test_audit_gui_theme.py focus ring, disabled colour at pixel (4,4)/(6,6); test_audit_gui_layout.py window/wizard sizes, column widths; test_gui_editor_layout.py `visible >= 8`) depend on the Qt style/fonts and screen of the platform (reading-only).
 - Timing bounds: test_audit_core.py:191 (<20 s), :272 (<10 s), :433 (<30 s), test_review_cc.py:260 (<5 s) - generous.
 - test_audit_gui_dialogs.py:309/317 click a modal box from a 100 ms `QTimer.singleShot`; if the box is not up in time the AssertionError is raised inside the timer and `exec()` blocks forever (no pytest-timeout is configured) - hang risk (reading-only).
 - Hypothesis: no seed / derandomize / database setting, `deadline=None`; tests re-seed every run (CI may red on a rare real counterexample that cannot be reproduced without `.hypothesis`). 175 extra seeded runs found nothing.
-- Global state: test_gui_theme.py:281 `theme.TOKENS == theme.LIGHT` depends on every earlier test restoring the theme (restore fixtures exist in 3 files; I have not yet run the reversed order).
+- Global state: test_gui_theme.py:281 `theme.TOKENS == theme.LIGHT` depends on every earlier test restoring the theme (restore fixtures exist in 3 files; reversed order run: green).
 - Environment: tests do not clear SOURCE_DATE_EPOCH / TZ / LANG; test_authoring.py:78 needs a resolvable OS user (getpass) ; test_userconfig.py:261 writes to `/proc/definitely/not/writable` (would create `C:\proc\...` on Windows when run as admin); test_examples.py:19 and test_review_cc.py use the `git` executable and the developer's global git config.
 - Isolation: no leftover files in the fake TMPDIR except pytest-of-root; no writes to the real HOME found in the repo-local runs except TESTS-07.
 
@@ -143,10 +143,37 @@ Probes run (non-pytest): XLSX typed cells (date/float/bool) import - works; ref-
 - Why it matters: the baseline commit/tag is the audit evidence; it attributes alice with bob's address.
 - Proposed fix: take the e-mail from config only when the name is also taken from config, else `name@localhost`.
 
-## Mutation probes (PARTIAL: 27 of 110 prepared mutants run; campaign was cut off)
-Harness: scratchpad/audit/tests/{mutations.py,run_mut.py,mut/results.jsonl}; mutants applied to a COPY of the whole rvs tree (PYTHONPATH trick), `pytest -x` on the covering files. Killed (11): B05 attrs dropped from digest, B12 baselines listed alphabetically, B13 unsigned snapshot trusted, B14 commit not taken back, B15 Windows device names, B16 deep verify never reports corrupt, A02 whitespace reason accepted, A05 history appended to unterminated line, A06 set_parents no-op writes history, A07 baselined items need no reason, A09 CR closed accepted.
-SURVIVED (16, i.e. tests stay green): B01, B02, B03, B04, B06, B07, B08, B09, B10, B11 (equivalent), A01, A03, A04, A08 (equivalent-ish), O01, O02 - see TESTS-02..06.
-Prepared but not yet run (110 total): cache (C01-C08), git (G01-G10), validate (V01-V13, incl. severity changes), rules (R01-R08), trace (T01-T08), itemsio (I01-I17), cli (CL01-CL12), diff/CR (D01-D05, CH01-CH04), baselines B17-B19, atomicio O03-O04. Predicted survivors from coverage: C03, G01, G04, G06, G08, V02/V03/V08, R01, T02, T03, I01/I02/I05-I07/I14-I17, CL01-CL04/CL06/CL07, D01, D04, D05.
+## Mutation probes
+Harness: scratchpad/audit/tests/{mutations.py,run_mut.py,mut/results.jsonl}. 110 one-line mutants applied to a COPY of the whole rvs tree (PYTHONPATH trick), run with `pytest -x` against the 4-12 test files that cover the area (GUI files not included, so a few survivors might be killed by a GUI test; none of the survivors below is GUI code). 44 killed, 66 SURVIVED.
+Killed (44): B05 B12 B13 B14 B15 B16 A02 A05 A06 A07 A09 O04 C01 C02 C04 C06 C07 C08 G02 G03 G05 G07 G09 V07 V08 V11 R05 R07 T02 T05 T06 T08 I01 I03 I04 I12 I13 CL08 CL09 D01 D03 CH01 CH02 CH03.
+SURVIVED, grouped (real gaps unless marked equivalent):
+- baselines: B01 tag-exists check, B02 BaseException rollback, B03 digest ignores parents, B04 digest ignores normative, B06 manifest not required in commit, B07 symlinked .rvs-cache, B08 renamed-folder digest check, B09 nested orphan tags, B10 name length 65, B17 O_EXCL reservation replaced by append (race), B18 rollback leaves history files created by the attempt, B19 tag-name validity check (B11 equivalent: defer() repeats the check).
+- authoring: A01 reason not trimmed in history, A03 whitespace-only text change = edit, A04 create history lacks 'links' (A08 equivalent: Doorstop document defaults give the same values).
+- atomicio: O01 permissions lost, O02 symlink replaced, O03 CRLF kept (write_text).
+- cache: C03 cache.key mode 0o666 (no test of the key file's permissions), C05 (cache written without key; dead branch).
+- git: G01 `*.tmp` files committed (half-written crash files), G04 undo_commit when HEAD moved, G06 symlinks in tagged tree read as files, G08 tag-name validation, G10 commit time zone.
+- validate: V01 RVS-DOC-FORMAT severity, V02 RVS-SCHEMA-MISSING severity (code never executed), V03 RVS-SCHEMA-OLDER severity, V05 RVS-CONFIG-YAML no longer fatal (exit 3 test passes by another route), V06 empty strings type-checked, V09/V10 doorstop severities raised (probably unreachable: replaced by RVS codes), V12, V13 (equivalent).
+- rules: R01 undefined-acronym default min_length 3, R03 trailing word boundary, R08 acronyms only checked in the statement (title/rationale not tested), R02/R04 defaults (equivalent: rules.yaml supplies the params).
+- trace: T01 child check ignoring satisfies/refines links, T03 impact depth-first instead of breadth-first (the regression test "shallowest depth" passes either way).
+- itemsio: I02 xlsx cell limit boundary, I05 alias `uid`, I06 README sheet imported, I07 `;` separator for ID lists, I09 empty int attribute counted as changed, I11 duplicate parents counted as change, I14 CSV rows with extra cells imported silently, I15 malformed IDs not reported, I16 wrong number after creation, I17 XLSX date cells read as datetimes.
+- cli: CL01 `--fast` ignored, CL02 BrokenPipe exit code, CL03 ProjectError exit 3->2, CL04 YAMLError exit 3->2, CL05 config errors in baseline/cr/diff exit 3->2, CL06 `cr show` lacks edited items, CL07 `diff --document` ignored, CL10 import continues although project cannot be loaded (exit 3), CL12 4-part --trace accepted.
+- diff/CR: D02 field order, D04 difflib on huge texts (MAX_DIFF_TOKENS fallback never taken), D05 added/removed marks swapped in documents, CH04 CR title blanked by update.
+Hypothesis: 175 seeded runs, no failure. Mutation score on the sampled areas: 40 %.
+
+## Flakiness, isolation and environment runs
+- Full suite in REVERSED order with TZ=Pacific/Kiritimati, LANG=LC_ALL=C and a fresh empty HOME: 820 passed, 6 deselected (no order dependence found, theme state is restored).
+- Golden tests with TZ or LANG changed: pass. With SOURCE_DATE_EPOCH set: see TESTS-14.
+- test_window_stays_responsive_while_exporting + test_cache + timing tests repeated 6x idle and 4x with 6 busy-loop processes on the 4 cores: all pass (timings not flaky here).
+- Leftovers: only `pytest-of-root` in TMPDIR; HOME gets `.config/rvs/cache.key` (TESTS-07); repo gets `examples/*/.rvs-cache` (TESTS-08).
+
+### TESTS-14 Golden tests fail when SOURCE_DATE_EPOCH is set in the environment
+- Where: tests/test_golden.py:36 (PDF hashes), src/rvs_core/exporters/pdf_out.py:203 (ReportLab `invariant=1`), tests/conftest.py (does not clear the variable)
+- Severity: medium (CI / packager environment)
+- Confidence: verified
+- Evidence: `SOURCE_DATE_EPOCH=1000000000 pytest tests/test_golden.py` -> `2 failed, 2 passed`: "outputs changed: ['coverage.pdf', 'impact-SYS-0002.pdf', 'spec.pdf', 'trace-SYS-EPS-down.pdf', 'vcm.pdf']" (both projects). Without the variable all 4 pass.
+- Why it matters: SOURCE_DATE_EPOCH is the standard reproducible-build variable (Debian/Nix builders; scripts/build_release.sh exports it); a release engineer running pytest in the same shell gets red golden tests. It also shows the PDF date metadata comes from the environment, not from the Provenance passed to the renderer.
+- Proposed fix: `monkeypatch.delenv("SOURCE_DATE_EPOCH", raising=False)` in an autouse fixture (and TZ/LANG pinning), or make pdf_out set the date from Provenance.
+- Test that would catch it: run the suite once with SOURCE_DATE_EPOCH set in CI.
 
 ## Checked and found correct
 - The suite is green and deterministic on this platform: 820/820 on three groupings, 0 skips, 0 warnings under `filterwarnings=error`; ruff, ruff format, mypy strict clean.

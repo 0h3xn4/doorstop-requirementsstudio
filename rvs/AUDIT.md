@@ -16,7 +16,7 @@
 
 The full test suite passes (820 passed, 6 deselected, 231 s, Linux, Python 3.13), ruff and mypy (strict) are clean, and clean installs of the wheel (Python 3.11, 3.12, 3.13) and the sdist (3.11, 3.13) work. Measured line coverage of `src/` is 93.3% and branch coverage 85.8% (GUI branches 76.0%); a full run in reversed order with a different time zone, locale and empty home directory is also green. **But the suite is a weaker safety net than its size suggests**: of 110 hand-made one-line defects injected by the test auditor, 66 left every covering test green, and many of the findings below survive deliberate mutation of the code (see the test-gap findings), which is how they got through. Two further facts: with `SOURCE_DATE_EPOCH` set in the environment (the release script exports it) two golden tests fail (TESTS-14), and some tests write outside their sandbox (`~/.config/rvs/cache.key`, `.rvs-cache` inside `examples/`; TESTS-07, 08).
 
-A ✔ after an ID means I reproduced the finding myself after the auditor reported it. All others carry the auditor's own reproduction (commands and output are in the per-area reports, linked below) unless the report says "reading-only".
+A ✔ after an ID means I reproduced the finding myself after the auditor reported it. One finding is weaker than its auditor rated it: **CORE-DATA-06** (no home directory) was reproduced only with the passwd lookup mocked; in a real run here, `rvs validate` with `HOME` unset works, so treat it as low unless your CI runs as a user without a passwd entry. All others carry the auditor's own reproduction (commands and output are in the per-area reports, linked below) unless the report says "reading-only".
 
 ## How the audit was done
 
